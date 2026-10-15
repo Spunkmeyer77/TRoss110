@@ -374,7 +374,7 @@ private:
     int cpClock = -1; double cpLevel = 1, cpShortCoef = 0.99, cpLastCoef = 0.999, cpTailAmt = 0.45;
     // accent + output
     dsp::Env accEnv; double accentAmt = 0.5;
-    static constexpr double kHeadroom = 0.7, kOutScale = 0.7;
+    static constexpr double kHeadroom = 0.7, kOutScale = 0.6;
     dsp::OnePole dcBlock[kNumVoices];
     double gainTarget[kNumVoices] {}, gainNow[kNumVoices] {}, masterTarget = 0.5, masterNow = 0.5, smooth = 0.999;
     bool ownOut[kNumVoices] {};
