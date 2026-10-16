@@ -31,9 +31,10 @@ inline int noteToVoice (int n)
 struct SoundParams
 {
     float master = -6, accent = 50;
-    float lvl[kNumVoices]   { 0, 0, 0, 0, 0, 0 };        // dB, -70..6
-    float tune[kNumVoices]  { 0, 0, 0, 0, 0, 0 };        // semitones
-    float decay[kNumVoices] { 50, 50, 50, 50, 50, 50 };  // %, 50 = the original timing
+    //                       BD     SD     CP    CH  OH  CY
+    float lvl[kNumVoices]   { -8.4f, 0,    -3.6f, 0, 0, 0 };    // dB, -70..6
+    float tune[kNumVoices]  { 0,     0,     2.6f, 0, 0, 0 };    // semitones
+    float decay[kNumVoices] { 24.1f, 43.9f, 20.3f, 50, 50, 50 }; // %, 50 = the original timing
     float bdAttack = 50, sdSnappy = 60, cpTail = 50, cyTone = 50;
     bool mute[kNumVoices] {}, solo[kNumVoices] {};
     bool ownOut[kNumVoices] {};   // true = the drum leaves the main mix and plays on its own output
@@ -54,6 +55,13 @@ public:
         set (slot, row, m);
     }
     void clear (int slot) { for (int r = 0; r < kNumRows; ++r) set (slot, r, 0); }
+    void copySlot (int from, int to) { for (int r = 0; r < kNumRows; ++r) set (to, r, get (from, r)); }
+    bool isEmpty (int slot) const
+    {
+        for (int r = 1; r < kNumRows; ++r)   // the accent row alone plays nothing
+            if (get (slot, r) != 0) return false;
+        return true;
+    }
     int getVersion() const { return version.load(); }
 
 private:

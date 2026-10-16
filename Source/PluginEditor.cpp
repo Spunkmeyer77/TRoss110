@@ -73,6 +73,20 @@ const char* kVoiceNotes[kNumVoices]  = { "C1", "D1", "D#1", "F#1", "A#1", "C#2" 
 const char* kExtraIds[kNumVoices]    = { "bd_attack", "sd_snappy", "cp_tail", nullptr, nullptr, "cy_tone" };
 const char* kExtraNames[kNumVoices]  = { "ATTACK", "SNAPPY", "TAIL", nullptr, nullptr, "TONE" };
 
+const char* kTuneTips[kNumVoices] = {
+    "Bass drum pitch, +/-12 semitones. Higher also makes the kick shorter, like the original circuit.",
+    "Snare drum pitch, +/-12 semitones (moves the snap's brightness with it).",
+    "Hand clap pitch: moves the clap's band-pass filter, +/-12 semitones.",
+    "Closed hat pitch: moves the whole metallic cluster, +/-12 semitones.",
+    "Open hat pitch: moves the whole metallic cluster, +/-12 semitones.",
+    "Cymbal pitch: moves the whole metallic cluster, +/-12 semitones." };
+const char* kExtraTips[kNumVoices] = {
+    "The click at the front of the kick.",
+    "How much noise snap against the drum body.",
+    "Level of the clap's reverb-like tail after the burst of hits.",
+    nullptr, nullptr,
+    "Right: bright attack shimmer. Left: darker ringing body." };
+
 // ---- layout (1000 x 500)
 constexpr int kMargin = 18, kChanW = 128, kTopH = 262, kSeqY = 266;
 constexpr int kKnobRow1 = 98, kKnobRow2 = 152, kKnobD = 34;
@@ -188,6 +202,34 @@ void TrossLookAndFeel::drawBubble (juce::Graphics& g, juce::BubbleComponent&, co
 }
 
 juce::Font TrossLookAndFeel::getSliderPopupFont (juce::Slider&) { return lcdFont (12.0f); }
+
+static juce::TextLayout tipLayout (const juce::String& text, float maxW)
+{
+    juce::AttributedString a;
+    a.setJustification (juce::Justification::topLeft);
+    a.append (text, font (12.0f), col::lcdInk);
+    juce::TextLayout l;
+    l.createLayoutWithBalancedLineLengths (a, maxW);
+    return l;
+}
+
+juce::Rectangle<int> TrossLookAndFeel::getTooltipBounds (const juce::String& tip, juce::Point<int> pos, juce::Rectangle<int> area)
+{
+    const auto l = tipLayout (tip, 300.0f);
+    const int w = (int) l.getWidth() + 22, h = (int) l.getHeight() + 16;
+    return juce::Rectangle<int> (pos.x > area.getCentreX() ? pos.x - (w + 12) : pos.x + 18,
+                                 pos.y > area.getCentreY() ? pos.y - (h + 6)  : pos.y + 8, w, h).constrainedWithin (area);
+}
+
+void TrossLookAndFeel::drawTooltip (juce::Graphics& g, const juce::String& text, int width, int height)
+{
+    const juce::Rectangle<float> r (0.0f, 0.0f, (float) width, (float) height);
+    g.setColour (juce::Colour (0xff0d0e0f));
+    g.fillRect (r);
+    g.setGradientFill (juce::ColourGradient::vertical (col::lcdBg1, 0.0f, col::lcdBg2, (float) height));
+    g.fillRect (r.reduced (2.0f));
+    tipLayout (text, 300.0f).draw (g, r.reduced (11.0f, 8.0f));
+}
 
 // ================================================================================================
 juce::Rectangle<float> StepGrid::padRect (int row, int step)
@@ -374,12 +416,15 @@ void ExportKey::showMenu()
     m.addItem (1, "Pattern " + juce::String (slot + 1) + " (playing)" + (playingEmpty ? " - empty" : ""), ! playingEmpty);
     m.addItem (2, "All patterns, in a row (" + juce::String ((int) filled.size()) + " with notes)", ! filled.empty());
     m.addItem (3, "All patterns as separate files", ! filled.empty());
+    const auto chain = proc.getChain();
+    m.addItem (5, "The chain, in a row (" + juce::String ((int) chain.size()) + " steps)", ! chain.empty());
     m.addSeparator();
     m.addItem (4, "Tip: drag this key onto a MIDI track to drop the playing pattern as a clip", false);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-                     [safe = juce::Component::SafePointer<ExportKey> (this)] (int id)
+                     [safe = juce::Component::SafePointer<ExportKey> (this), chain] (int id)
                      {
                          if (safe == nullptr) return;
+                         if (id == 5) safe->exportChain (chain);
                          if (id == 1) safe->exportPlaying();
                          if (id == 2) safe->exportAllInARow();
                          if (id == 3) safe->exportAllSeparate();
@@ -411,6 +456,19 @@ void ExportKey::exportAllInARow()
 {
     auto midi = MidiExport::make (proc.patterns, nonEmptySlots(), length(), proc.currentBpm.load(), "TRoss 110 Patterns");
     chooser = std::make_unique<juce::FileChooser> ("Save all patterns as one MIDI file", exportStartFolder().getChildFile ("TRoss110 Patterns.mid"), "*.mid");
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                          | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [midi] (const juce::FileChooser& fc)
+                          {
+                              const auto f = fc.getResult();
+                              if (f != juce::File()) MidiExport::write (midi, f.withFileExtension ("mid"));
+                          });
+}
+
+void ExportKey::exportChain (const std::vector<int>& chain)
+{
+    auto midi = MidiExport::make (proc.patterns, chain, length(), proc.currentBpm.load(), "TRoss 110 Chain");
+    chooser = std::make_unique<juce::FileChooser> ("Save the chain as one MIDI file", exportStartFolder().getChildFile ("TRoss110 Chain.mid"), "*.mid");
     chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
                           | juce::FileBrowserComponent::warnAboutOverwriting,
                           [midi] (const juce::FileChooser& fc)
@@ -461,7 +519,19 @@ void PatternPad::paint (juce::Graphics& g)
         const auto r = buttonRect (i);
         if (i == sel) drawKey (g, r, col::keyHi1, col::keyHi2, 4.0f, 2.0f);
         else          drawKey (g, r, col::key1.darker (0.15f), col::key2.darker (0.15f), 4.0f, 2.0f);
-        drawLed (g, { r.getX() + 8.0f, r.getCentreY() }, 5.0f, i == cur || (i == pending && blink));
+        const juce::Point<float> ledC { r.getX() + 8.0f, r.getCentreY() };
+        if (proc.getChainLength() > 0 && proc.isInChain (i) && i != cur)   // in the chain: dim LED; the playing one is bright
+        {
+            g.setColour (col::red.withAlpha (0.45f));
+            g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre (ledC));
+        }
+        else
+            drawLed (g, ledC, 5.0f, i == cur || (i == pending && blink));
+        if (proc.patterns.isEmpty (i))   // small dash for empty slots
+        {
+            g.setColour (juce::Colours::black.withAlpha (0.3f));
+            g.fillRect (r.getRight() - 9.0f, r.getBottom() - 5.0f, 5.0f, 1.5f);
+        }
         g.setColour (juce::Colour (0xff1e1f20));
         g.setFont (font (10.0f, true));
         g.drawText (juce::String (i + 1), r.withTrimmedLeft (8.0f), juce::Justification::centred);
@@ -473,6 +543,35 @@ void PatternPad::mouseDown (const juce::MouseEvent& e)
     for (int i = 0; i < kNumSlots; ++i)
         if (buttonRect (i).expanded (2.0f).contains (e.position))
         {
+            if (e.mods.isPopupMenu())   // right-click: copy, clear, chain
+            {
+                juce::PopupMenu copyTo;
+                for (int s = 0; s < kNumSlots; ++s) copyTo.addItem (100 + s, "Pattern " + juce::String (s + 1), s != i);
+                juce::PopupMenu m;
+                m.addSectionHeader ("Pattern " + juce::String (i + 1));
+                m.addSubMenu ("Copy to", copyTo);
+                m.addItem (1, "Clear", ! proc.patterns.isEmpty (i));
+                m.addSeparator();
+                m.addSectionHeader ("Chain  (Shift-click pattern keys to build it)");
+                m.addItem (2, "Add pattern " + juce::String (i + 1) + " to the chain", proc.getChainLength() < Tross110Processor::kMaxChain);
+                m.addItem (3, "Remove the last chain step", proc.getChainLength() > 0);
+                m.addItem (4, "Clear the chain", proc.getChainLength() > 0);
+                m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                                 [safe = juce::Component::SafePointer<PatternPad> (this), i] (int id)
+                                 {
+                                     if (safe == nullptr) return;
+                                     if (id == 1) safe->proc.patterns.clear (i);
+                                     if (id == 2) safe->proc.chainAppend (i);
+                                     if (id == 3) safe->proc.chainRemoveLast();
+                                     if (id == 4) safe->proc.chainClear();
+                                     if (id >= 100) safe->proc.patterns.copySlot (i, id - 100);
+                                     safe->repaint();
+                                 });
+                return;
+            }
+            if (e.mods.isShiftDown()) { proc.chainAppend (i); repaint(); return; }   // build a chain
+            proc.chainClear();   // a plain click goes back to a single pattern
+            proc.selectSlot (i);
             if (auto* p = proc.apvts.getParameter ("pattern"))
             {
                 p->beginChangeGesture();
@@ -490,7 +589,10 @@ void StatusLcd::paint (juce::Graphics& g)
     auto r = getLocalBounds().toFloat().reduced (3.0f);
     drawLcd (g, r);
     const int cur = proc.getCurrentSlot(), pending = proc.getPendingSlot();
-    const juce::String txt = pending >= 0 ? "PAT " + juce::String (cur + 1).paddedLeft ('0', 2) + " > " + juce::String (pending + 1).paddedLeft ('0', 2)
+    const int chainN = proc.getChainLength();
+    const juce::String txt = chainN > 0 ? "CHN " + juce::String (juce::jmax (0, proc.getChainPos()) + 1) + "/" + juce::String (chainN)
+                                            + " P" + juce::String (cur + 1).paddedLeft ('0', 2)
+                           : pending >= 0 ? "PAT " + juce::String (cur + 1).paddedLeft ('0', 2) + " > " + juce::String (pending + 1).paddedLeft ('0', 2)
                                           : "PATTERN " + juce::String (cur + 1).paddedLeft ('0', 2);
     g.setFont (lcdFont (12.5f));
     g.setColour (col::lcdInk.withAlpha (0.22f));
@@ -516,12 +618,18 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
         strip->setTooltip ("Click to play. Shift-click for an accented hit. Records into the pattern while REC is on and the song plays.");
         content.addAndMakeVisible (*strip);
         strips.push_back (std::move (strip));
-        addKnob (id + "_tune",  { x + 36, kKnobRow1 }, kKnobD);
-        addKnob (id + "_decay", { x + 92, kKnobRow1 }, kKnobD);
-        addKnob (id + "_lvl",   { x + 36, kKnobRow2 }, kKnobD);
-        if (kExtraIds[v] != nullptr) addKnob (kExtraIds[v], { x + 92, kKnobRow2 }, kKnobD);
-        addButton (id + "_mute", "M", { x + 8, 213, 26, 17 }, "small").getProperties().set ("onColour", (juce::int64) col::muteOn.getARGB());
-        addButton (id + "_solo", "S", { x + kChanW - 34, 213, 26, 17 }, "small").getProperties().set ("onColour", (juce::int64) col::blue.getARGB());
+        addKnob (id + "_tune",  { x + 36, kKnobRow1 }, kKnobD).setTooltip (kTuneTips[v]);
+        addKnob (id + "_decay", { x + 92, kKnobRow1 }, kKnobD).setTooltip (v == BD
+            ? "How long the kick rings. 50 % is the classic timing. Tuning higher also shortens it."
+            : "How long the sound lasts. 50 % is the classic timing; 0 % is a quarter as long, 100 % four times as long.");
+        addKnob (id + "_lvl",   { x + 36, kKnobRow2 }, kKnobD).setTooltip ("Channel level, -inf to +6 dB.");
+        if (kExtraIds[v] != nullptr) addKnob (kExtraIds[v], { x + 92, kKnobRow2 }, kKnobD).setTooltip (kExtraTips[v]);
+        auto& mute = addButton (id + "_mute", "M", { x + 8, 213, 26, 17 }, "small");
+        mute.getProperties().set ("onColour", (juce::int64) col::muteOn.getARGB());
+        mute.setTooltip ("Mute this drum.");
+        auto& solo = addButton (id + "_solo", "S", { x + kChanW - 34, 213, 26, 17 }, "small");
+        solo.getProperties().set ("onColour", (juce::int64) col::blue.getARGB());
+        solo.setTooltip ("Solo: only soloed drums play.");
         if (! proc.isStandalone())   // the standalone app has only the main output
         {
             auto& own = addButton (id + "_out", "OWN OUT", { x + 34, 236, 60, 17 }, "small");
@@ -529,16 +637,29 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
             own.setTooltip ("On: this drum leaves the main mix and plays on its own mono output");
         }
     }
-    addKnob ("accent", { kMasterX + 44, 106 }, 46);
-    addKnob ("master", { kMasterX + 136, 106 }, 46);
+    addKnob ("accent", { kMasterX + 44, 106 }, 46).setTooltip ("How hard accented steps hit: a short swell on the whole machine that also adds grit. 0 % turns accents off.");
+    addKnob ("master", { kMasterX + 136, 106 }, 46).setTooltip ("Main output level. Drums on their own outputs are not affected.");
     content.addAndMakeVisible (lcd);
+    lcd.setTooltip ("Playing pattern (and the queued one), or the chain step while a chain runs.");
+
+    helpBtn.getProperties().set ("style", "small");
+    helpBtn.getProperties().set ("onColour", (juce::int64) col::blue.getARGB());
+    helpBtn.setClickingTogglesState (true);
+    helpBtn.setToggleState (proc.showHelp.load(), juce::dontSendNotification);
+    helpBtn.onClick = [this] { proc.showHelp = helpBtn.getToggleState(); tooltips.hideTip(); };
+    helpBtn.setTooltip ("Help windows on/off. The knob value read-outs always show.");
+    helpBtn.setBounds (kMasterX + kMasterW - 62, 230, 54, 18);
+    content.addAndMakeVisible (helpBtn);
     lcd.setBounds (kMasterX + 6, 150, kMasterW - 12, 30);
 
     // sequencer
     content.addAndMakeVisible (grid);
     grid.setBounds (0, kSeqY, 760, kHeight - kSeqY);
+    grid.setTooltip ("Click a cell to set or clear a step; drag along a row to paint. AC = accent for every drum on that step.");
     content.addAndMakeVisible (patternPad);
     patternPad.setBounds (760, kSeqY, 240, 108);
+    patternPad.setTooltip ("Click: play that pattern (waits for step 1 while playing). Shift-click: add it to a chain. "
+                           "Right-click: copy to another slot, clear, or edit the chain.");
 
     const int ry = kSeqY + 112;
     auto len = std::make_unique<juce::Slider> (juce::Slider::RotaryVerticalDrag, juce::Slider::NoTextBox);
@@ -551,12 +672,17 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
     len->setTooltip ("Drag up/down to set the pattern length (12 for triplet feels)");
     sliders.push_back (std::move (len));
 
-    addButton ("seqon", "RUN", { 842, ry + 2, 70, 25 }, "blue").getProperties().set ("led", true);
+    auto& run = addButton ("seqon", "RUN", { 842, ry + 2, 70, 25 }, "blue");
+    run.getProperties().set ("led", true);
+    run.setTooltip ("Sequencer on/off. Off: TRoss 110 only plays from MIDI.");
+    clearBtn.setTooltip ("Clears the pattern that's playing.");
     clearBtn.getProperties().set ("style", "key");
     clearBtn.setBounds (918, ry + 2, 66, 25);
     clearBtn.onClick = [this] { proc.clearCurrentPattern(); grid.repaint(); };
     content.addAndMakeVisible (clearBtn);
-    addButton ("rec", "REC", { 842, ry + 34, 70, 25 }, "key").getProperties().set ("led", true);
+    auto& rec = addButton ("rec", "REC", { 842, ry + 34, 70, 25 }, "key");
+    rec.getProperties().set ("led", true);
+    rec.setTooltip ("While the song plays, keyboard notes and name-strip clicks are written into the nearest step. Velocity above 100 adds the accent.");
     exportKey.setBounds (918, ry + 34, 66, 25);
     exportKey.setTooltip ("Click: export patterns as MIDI files. Drag onto a MIDI track: drop the playing pattern as a clip.");
     content.addAndMakeVisible (exportKey);
@@ -569,6 +695,7 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
         playBtn.setToggleState (proc.internalPlay.load(), juce::dontSendNotification);
         playBtn.onClick = [this] { proc.internalPlay = playBtn.getToggleState(); };
         playBtn.setBounds (kMasterX + 6, 196, 70, 25);
+        playBtn.setTooltip ("Start / stop (standalone app).");
         content.addAndMakeVisible (playBtn);
 
         bpmBox.setSliderStyle (juce::Slider::RotaryVerticalDrag);
@@ -581,6 +708,7 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
         bpmBox.textFromValueFunction = [] (double v) { return juce::String ((int) v) + " BPM"; };
         bpmBox.onValueChange = [this] { proc.internalBpm = (float) bpmBox.getValue(); };
         bpmBox.setBounds (kMasterX + 84, 193, 90, 30);
+        bpmBox.setTooltip ("Tempo: drag up or down.");
         content.addAndMakeVisible (bpmBox);
     }
 
@@ -697,7 +825,7 @@ void Tross110Editor::paintPanel (juce::Graphics& g)
     {
         g.setColour (col::softPrint);
         g.setFont (font (8.5f, false, 0.15f));
-        g.drawText ("MASTER", kMasterX, 196, kMasterW, 14, juce::Justification::centred);
+        g.drawText ("MASTER", kMasterX, 200, kMasterW, 14, juce::Justification::centred);
     }
 
     // ---- seam and the lower section
@@ -722,6 +850,7 @@ void Tross110Editor::timerCallback()
 
     if (v != lastVersion || st != lastStep || slot != lastSlot || len != lastLen)
         grid.repaint();
+    if (v != lastVersion) patternPad.repaint();   // empty-slot dashes follow the pads
     if (slot != lastSlot || pend != lastPending || pend >= 0 || sel != lastSel)
     {
         patternPad.repaint();
@@ -729,5 +858,6 @@ void Tross110Editor::timerCallback()
     }
     for (auto& s : strips)
         if (s->lastHit != 0 && juce::Time::getMillisecondCounter() - s->lastHit < 260) s->repaint();
+    if (const int cv = proc.getChainVersion() * 64 + proc.getChainPos(); cv != lastChain) { patternPad.repaint(); lcd.repaint(); lastChain = cv; }
     lastVersion = v; lastStep = st; lastSlot = slot; lastPending = pend; lastLen = len; lastSel = sel;
 }

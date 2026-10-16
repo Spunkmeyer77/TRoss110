@@ -44,6 +44,21 @@ public:
     int  getPlayStep() const    { return playStep.load(); }      // step being played, -1 = stopped
     void clearCurrentPattern()  { patterns.clear (currentSlot.load()); }
 
+    // a plain click on a pattern button: that slot (queued until step 1 while playing)
+    void selectSlot (int slot);
+
+    // ---- pattern chain (message thread edits, audio thread plays). Locked to the song position:
+    // chain step = (song position in steps / LENGTH) mod chain length, so jumps and loops land right.
+    static constexpr int kMaxChain = 32;
+    void chainAppend (int slot);                 // Shift-click a pattern button
+    void chainClear();
+    void chainRemoveLast();
+    int  getChainLength() const          { return chainLen.load(); }
+    int  getChainPos() const             { return chainPos.load(); }   // chain step that's playing
+    bool isInChain (int slot) const      { for (int i = 0; i < chainLen.load(); ++i) if (chain[i].load() == slot) return true; return false; }
+    std::vector<int> getChain() const    { std::vector<int> v; for (int i = 0; i < chainLen.load(); ++i) v.push_back (chain[i].load()); return v; }
+    int  getChainVersion() const         { return chainVersion.load(); }
+
     // a click on a drum's name strip: plays it like a keyboard hit (accent = Shift-click, velocity 127)
     // and, with REC on while playing, records it. Called from the UI thread; handled in the next block.
     void panelHit (int voice, bool accent)
@@ -60,6 +75,9 @@ public:
     std::atomic<bool>  internalPlay { false };
     std::atomic<float> internalBpm { 120.0f };
 
+    // HELP key: help windows on/off (saved with the project; knob value read-outs always show)
+    std::atomic<bool> showHelp { true };
+
     // the song tempo seen in the last audio block (used for MIDI export)
     std::atomic<double> currentBpm { 120.0 };
 
@@ -69,6 +87,11 @@ private:
     double sampleRate = 44100.0;
 
     std::atomic<int> currentSlot { 0 }, pendingSlot { -1 }, playStep { -1 };
+
+    void setChain (const std::vector<int>&);
+    int chainSlotFor (long long absStep, int len) const;   // -1 = no chain
+    std::atomic<int> chain[kMaxChain] {};
+    std::atomic<int> chainLen { 0 }, chainPos { -1 }, chainVersion { 0 };
 
     // single-producer / single-consumer queue of name-strip clicks (UI thread -> audio thread)
     static constexpr int kHitQueue = 64;
@@ -95,7 +118,7 @@ private:
     } raw {};
 
     void pullParams();
-    void doStep (int step, bool seqOn);
+    void doStep (int step, long long absStep, int len, bool seqOn);
     void recordHit (int voice, int velocity, double sixteenthPos, int len);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Tross110Processor)

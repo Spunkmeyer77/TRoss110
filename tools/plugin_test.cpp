@@ -38,9 +38,11 @@ int main (int argc, char** argv)
     proc.setRateAndBufferSizeDetails (sr, block);
     proc.prepareToPlay (sr, block);
     std::printf ("params: %d\n", (int) proc.getParameters().size());
-    check (std::abs (proc.apvts.getRawParameterValue ("bd_decay")->load() - 50.0f) < 0.01f
-           && std::abs (proc.apvts.getRawParameterValue ("cp_tail")->load() - 50.0f) < 0.01f,
-           "defaults: decays and clap tail at 50 %");
+    auto pv = [&] (const char* id) { return proc.apvts.getRawParameterValue (id)->load(); };
+    auto near = [] (float a, float b) { return std::abs (a - b) < 0.01f; };
+    check (near (pv ("bd_decay"), 24.1f) && near (pv ("bd_lvl"), -8.4f) && near (pv ("sd_decay"), 43.9f) && near (pv ("sd_snappy"), 60.0f)
+           && near (pv ("cp_tune"), 2.6f) && near (pv ("cp_decay"), 20.3f) && near (pv ("cp_lvl"), -3.6f),
+           "defaults: BD Decay 24.1 %, Level -8.4 dB; SD Decay 43.9 %, Snappy 60 %; CP Tune 2.6 st, Decay 20.3 %, Level -3.6 dB");
     check (proc.apvts.getParameter ("pattern")->getNumSteps() == 12, "12 pattern slots");
     std::printf ("BD Decay shows as \"%s\"\n", proc.apvts.getParameter ("bd_decay")->getCurrentValueAsText().toRawUTF8());
 
@@ -248,6 +250,52 @@ int main (int argc, char** argv)
         check (tross110::MidiExport::isEmpty (pm, 0) && ! tross110::MidiExport::isEmpty (pm, 7), "empty patterns are detected");
     }
 
+    // 6e. copy + chain: copy pattern 1 to 4, chain 4,2 locked to the song position, saved with the state
+    {
+        const int len = 16;
+        pats.copySlot (0, 3);
+        bool same = true;
+        for (int r = 0; r < tross110::kNumRows; ++r) same &= pats.get (3, r) == pats.get (0, r);
+        check (same && ! pats.isEmpty (3), "Copy to: pattern 1 copied into pattern 4");
+
+        proc.chainAppend (3); proc.chainAppend (1);
+        check (proc.getChainLength() == 2, "chain built: 4, 2");
+        host.playing = true; host.ppq = 0.0;
+        std::vector<int> barSlots;
+        int prevStep = -1;
+        for (int b = 0; b < 1600 && barSlots.size() < 4; ++b)
+        {
+            run (1);
+            const int st = proc.getPlayStep();
+            if (st == 0 && prevStep != 0) barSlots.push_back (proc.getCurrentSlot());
+            prevStep = st;
+        }
+        check (barSlots.size() == 4 && barSlots[0] == 3 && barSlots[1] == 1 && barSlots[2] == 3 && barSlots[3] == 1,
+               "chain plays 4, 2, 4, 2 bar by bar");
+        host.ppq = 4.0 * 5 + 0.5;   // jump into bar 6 -> chain step 2 -> pattern 2
+        run (60);
+        check (proc.getCurrentSlot() == 1 && proc.getChainPos() == 1, "after a jump the chain lands on the right pattern");
+
+        proc.showHelp = false;
+        juce::MemoryBlock st; proc.getStateInformation (st);
+        Tross110Processor other;
+        other.setStateInformation (st.getData(), (int) st.getSize());
+        check (other.getChainLength() == 2 && other.getChain() == std::vector<int> ({ 3, 1 }), "chain saved and restored with the project");
+        check (! other.showHelp.load(), "HELP off is saved with the project");
+        proc.showHelp = true;
+
+        auto chainMidi = tross110::MidiExport::make (pats, proc.getChain(), len, 120.0, "chain");
+        double endTick = 0;
+        for (auto* e : *chainMidi.getTrack (0)) endTick = juce::jmax (endTick, e->message.getTimeStamp());
+        check (std::abs (endTick - 2 * 16 * 24) < 0.5, "chain export = 2 patterns in a row");
+
+        proc.chainClear();
+        check (proc.getChainLength() == 0, "chain cleared");
+        host.playing = false;
+        run (2);
+        pats.clear (3);
+    }
+
     // 7. state round trip
     juce::MemoryBlock state; proc.getStateInformation (state);
     {
@@ -287,6 +335,16 @@ int main (int argc, char** argv)
         pngFile.deleteFile();
         if (auto os = pngFile.createOutputStream()) png.writeImageToStream (img, *os);
         ed->setSize (baseW, baseH);
+    }
+    {   // a help window, drawn the way the plug-in draws it
+        auto& lf = ed->getLookAndFeel();
+        const juce::String tip = "How long the kick rings. 50 % is the classic timing. Tuning higher also shortens it.";
+        const auto b = lf.getTooltipBounds (tip, { 10, 10 }, { 0, 0, 1000, 500 });
+        juce::Image img (juce::Image::ARGB, b.getWidth(), b.getHeight(), true);
+        { juce::Graphics g (img); lf.drawTooltip (g, tip, b.getWidth(), b.getHeight()); }
+        check (b.getWidth() > 60 && b.getHeight() > 20, "help window has room for its text");
+        auto f = outDir.getChildFile ("tooltip.png"); f.deleteFile();
+        if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
     }
     ed.reset();
 

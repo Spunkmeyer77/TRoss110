@@ -13,10 +13,22 @@ public:
     void drawButtonText (juce::Graphics&, juce::TextButton&, bool highlighted, bool down) override;
     void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip, const juce::Rectangle<float>& body) override;
     juce::Font getSliderPopupFont (juce::Slider&) override;
+    void drawTooltip (juce::Graphics&, const juce::String& text, int width, int height) override;
+    juce::Rectangle<int> getTooltipBounds (const juce::String& tipText, juce::Point<int> screenPos, juce::Rectangle<int> parentArea) override;
+};
+
+// Help windows: shown only while HELP is on (the knob value read-outs are separate and always work)
+class HelpTooltips : public juce::TooltipWindow
+{
+public:
+    HelpTooltips (juce::Component* parent, Tross110Processor& p) : juce::TooltipWindow (parent, 600), proc (p) {}
+    juce::String getTipFor (juce::Component& c) override { return proc.showHelp.load() ? juce::TooltipWindow::getTipFor (c) : juce::String(); }
+private:
+    Tross110Processor& proc;
 };
 
 // Lower section: step numbers and the 7 x 16 LCD grid. Click a cell to toggle, drag to paint.
-class StepGrid : public juce::Component
+class StepGrid : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     explicit StepGrid (Tross110Processor& p) : proc (p) { setOpaque (true); }
@@ -72,11 +84,12 @@ private:
     void exportPlaying();
     void exportAllInARow();
     void exportAllSeparate();
+    void exportChain (const std::vector<int>& chain);
     std::vector<int> nonEmptySlots() const;
     int length() const;
 };
 
-class PatternPad : public juce::Component
+class PatternPad : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     explicit PatternPad (Tross110Processor& p) : proc (p) { setOpaque (true); }
@@ -88,7 +101,7 @@ private:
 };
 
 // LCD read-out in the master section: playing pattern, and the queued one
-class StatusLcd : public juce::Component
+class StatusLcd : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     explicit StatusLcd (Tross110Processor& p) : proc (p) {}
@@ -134,9 +147,10 @@ private:
     // standalone app only
     juce::TextButton playBtn { "PLAY" };
     juce::Slider bpmBox;
-    juce::TooltipWindow tooltips { this, 600 };
+    HelpTooltips tooltips { this, proc };
+    juce::TextButton helpBtn { "HELP" };
 
-    int lastVersion = -1, lastStep = -2, lastSlot = -1, lastPending = -2, lastLen = -1, lastSel = -1;
+    int lastVersion = -1, lastStep = -2, lastSlot = -1, lastPending = -2, lastLen = -1, lastSel = -1, lastChain = -1;
 
     juce::Slider& addKnob (const juce::String& paramId, juce::Point<int> centre, int diameter);
     juce::Button& addButton (const juce::String& paramId, const juce::String& text, juce::Rectangle<int> r, const char* style);

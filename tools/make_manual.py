@@ -111,6 +111,8 @@ s += [table([
                "tails ringing under it - which also drives the output into grit. 0 % turns accents off."],
     ["VOLUME", "Main output level. Drums on their own outputs are not affected."],
     ["Display", "Shows the playing pattern, and the queued one (for example PAT 01 > 04)."],
+    ["HELP", "Help windows on/off. With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
+             "show either way. The setting is saved with your song."],
     ["PLAY / BPM", "Standalone app only: start/stop and tempo (drag the read-out up or down)."],
 ], [30 * mm, W - 30 * mm])]
 
@@ -129,11 +131,17 @@ s += [table([
             "nearest step of the playing pattern. Velocity above 100 (or Shift-click) also sets the accent."],
     ["PATTERN 1-12", "Twelve pattern slots. While playing, a new slot waits until the current pattern returns to step 1, so "
                      "changes always land on the bar; its LED blinks while it waits. While stopped, it switches at once. "
-                     "The selected slot can also be automated from the host (the \"Pattern\" parameter)."],
+                     "A small dash on a key means that slot is empty. The selected slot can also be automated from the host "
+                     "(the \"Pattern\" parameter)."],
+    ["Right-click a pattern key", "Copy to: copies that pattern into another slot. Clear: empties it. Also adds to, shortens or clears the chain."],
+    ["Shift-click pattern keys", "Builds a chain: each Shift-click adds that pattern as the next step (up to 32). The chain plays one "
+                                 "pattern per bar and follows the song position, so jumping or looping in the DAW lands on the right "
+                                 "pattern. Patterns in the chain show a dim LED, the playing one a bright LED, and the display shows "
+                                 "CHN step/length and the pattern. A plain click on a pattern key ends the chain."],
     ["EXPORT MIDI", "Click for a menu: export the playing pattern, all patterns one after another, or every pattern as its "
-                    "own .mid file. Or drag the key straight onto a MIDI track to drop the playing pattern in as a clip."],
+                    "own .mid file, or the chain as one file. Or drag the key straight onto a MIDI track to drop the playing pattern in as a clip."],
 ], [30 * mm, W - 30 * mm])]
-s += [Spacer(1, 6), P("All twelve patterns are saved with your song, together with every knob.")]
+s += [Spacer(1, 6), P("All twelve patterns and the chain are saved with your song, together with every knob.")]
 
 s += [Paragraph("4  Playing from MIDI", h1),
       P("TRoss 110 listens on all MIDI channels. Velocities up to 100 set the level of the hit; anything above 100 also fires "

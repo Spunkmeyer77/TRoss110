@@ -3,6 +3,8 @@
 110-style analog drum machine with a 16-step sequencer (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026.
 
 Six voices: bass drum, snare, hand clap, closed hat, open hat and cymbal, plus a global accent.
+Defaults: BD Decay 24.1 %, Level -8.4 dB · SD Decay 43.9 %, Snappy 60 % · Clap Tune +2.6 st, Decay 20.3 %, Level -3.6 dB.
+
 The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 
 ## Using it
@@ -19,7 +21,10 @@ The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 | CLEAR | Clears the pattern that's playing |
 | REC | While the host is playing, keyboard hits and name-strip clicks are written into the nearest step. Velocity above 100 also sets the accent. On by default |
 | PATTERN 1–12 | 12 pattern slots. While playing, a new slot waits until the current pattern reaches step 1. While stopped, it switches immediately. The LED shows which slot is playing; a blinking LED shows the slot that's queued |
-| EXPORT MIDI | Click for a menu: export the playing pattern, all patterns in a row, or all patterns as separate `.mid` files. Drag the key onto a MIDI track to drop the playing pattern in as a clip. Steps are 16th notes, accented steps velocity 127, channel 10 |
+| Pattern keys, right-click | **Copy to** another slot, **Clear**, or edit the chain. A dash on a key means that slot is empty |
+| Pattern chain | **Shift-click** pattern keys to chain them (up to 32 steps, one pattern per bar). The chain follows the song position, so jumps and loops land on the right pattern. Dim LEDs = in the chain; the display shows `CHN step/length`. A plain click ends the chain. Saved with the project |
+| HELP | Help windows on/off (the knob value read-outs always show). Saved with the project |
+| EXPORT MIDI | Click for a menu: export the playing pattern, all patterns in a row, all patterns as separate `.mid` files, or the chain. Drag the key onto a MIDI track to drop the playing pattern in as a clip. Steps are 16th notes, accented steps velocity 127, channel 10 |
 
 **Keyboard map (Ableton note names, C1 = MIDI 36):** BD C1/B0 · SD D1/E1/C#1 · HC D#1 · CH F#1/G#1 · OH A#1 ·
 CY C#2/D#2/E2/F2/G2/A2.
