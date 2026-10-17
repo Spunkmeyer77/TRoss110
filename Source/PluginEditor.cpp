@@ -303,6 +303,13 @@ void StepGrid::paint (juce::Graphics& g)
                 g.setColour (col::lcdInk.withAlpha (active ? 0.35f : 0.12f));
                 g.fillRect (juce::Rectangle<float> (4.0f, 2.0f).withCentre (r.getCentre()));
             }
+            if (row > 0 && proc.patterns.stepHasLock (slot, row - 1, s))   // corner notch: this step has locks
+            {
+                juce::Path t;
+                t.addTriangle (r.getRight() - 7.0f, r.getY(), r.getRight(), r.getY(), r.getRight(), r.getY() + 7.0f);
+                g.setColour (on ? col::lcdBg1 : col::lcdInk.withAlpha (0.8f));
+                g.fillPath (t);
+            }
             if (s == playing && active)
             {
                 g.setColour (col::lcdInk.withAlpha (0.55f));
@@ -338,6 +345,198 @@ void StepGrid::mouseDrag (const juce::MouseEvent& e)
     if (! hit (e.position, row, step) || row != dragRow || step == lastDragStep) return;
     lastDragStep = step;
     proc.patterns.setCell (proc.getCurrentSlot(), row, step, dragValue);
+    repaint();
+}
+
+// ================================================================================================
+namespace
+{
+const char* kLockVoiceNames[kNumVoices] = { "BD", "SD", "HC", "CH", "OH", "CY" };
+const char* kLockTabNames[kNumLockParams] = { "TUNE", "DECAY", "LEVEL", "" };
+constexpr float kBarTop = kLcdTop + 16.0f, kBarBottom = kLcdTop + (float) kNumRows * kRowPitch + 14.0f;
+juce::String lockText (int param, float v)
+{
+    if (param == LTune)  return (v > 0.05f ? "+" : "") + juce::String (v, 1);
+    if (param == LLevel) return v <= -69.9f ? juce::String ("-inf") : juce::String (v, 1);
+    return juce::String (juce::roundToInt (v));
+}
+}
+
+juce::Rectangle<float> LockGrid::tabRect (int i)  { return { kGridX + (float) i * 76.0f, 213.0f, 70.0f, 18.0f }; }
+juce::Rectangle<float> LockGrid::voiceRect (int v) { return { (float) kMargin - 4.0f, kRowsTop + (float) (v + 1) * kRowPitch - 2.0f, 46.0f, kCellH + 4.0f }; }
+
+void LockGrid::paint (juce::Graphics& g)
+{
+    g.setGradientFill (juce::ColourGradient::vertical (col::lowerTop, 0.0f, col::lowerBottom, (float) getHeight()));
+    g.fillAll();
+    if (param == LExtra && ! hasExtra (voice)) param = LTune;
+
+    const int slot = proc.getCurrentSlot();
+    const int playing = proc.getPlayStep();
+    const int len = (int) proc.apvts.getRawParameterValue ("seqlen")->load();
+    const float lo = lockMin (param), hi = lockMax (param);
+    static const char* knobIds[kNumLockParams] = { "_tune", "_decay", "_lvl", "" };
+    static const char* extraIds[kNumVoices] = { "bd_attack", "sd_snappy", "cp_tail", "", "", "cy_tone" };
+    static const char* voiceIds[kNumVoices] = { "bd", "sd", "cp", "ch", "oh", "cy" };
+    const juce::String knobId = param == LExtra ? juce::String (extraIds[voice]) : juce::String (voiceIds[voice]) + knobIds[param];
+    const float knob = proc.apvts.getRawParameterValue (knobId)->load();
+    auto yFor = [&] (float v) { return kBarBottom - (v - lo) / (hi - lo) * (kBarBottom - kBarTop); };
+
+    for (int s = 0; s < kNumSteps; ++s)
+    {
+        const auto x = kGridX + (float) s * kColPitch;
+        g.setColour (s % 4 == 0 ? col::blue : col::softPrint);
+        g.setFont (font (9.5f, s % 4 == 0));
+        g.drawText (juce::String (s + 1), juce::Rectangle<float> (x, 10.0f, kCellW, 12.0f), juce::Justification::centred);
+    }
+
+    const juce::Rectangle<float> glass (kGridX - 8.0f, kLcdTop, 16 * kColPitch - (kColPitch - kCellW) + 16.0f,
+                                        (float) kNumRows * kRowPitch + 22.0f);
+    drawLcd (g, glass);
+
+    // drum selector
+    g.setColour (col::softPrint);
+    g.setFont (font (9.0f, true, 0.1f));
+    g.drawText ("LOCK", juce::Rectangle<float> ((float) kMargin, kRowsTop, 44.0f, kCellH), juce::Justification::centredLeft);
+    for (int v = 0; v < kNumVoices; ++v)
+    {
+        const auto r = voiceRect (v);
+        if (v == voice) { g.setColour (col::blueDark); g.fillRoundedRectangle (r, 3.0f); }
+        g.setColour (v == voice ? juce::Colours::white : col::print);
+        g.setFont (font (10.0f, true, 0.08f));
+        g.drawText (kLockVoiceNames[v], r.withTrimmedLeft (4.0f), juce::Justification::centredLeft);
+        if (proc.patterns.hasAnyLock (slot) && [&] { for (int s = 0; s < kNumSteps; ++s) if (proc.patterns.stepHasLock (slot, v, s)) return true; return false; }())
+            drawLed (g, { r.getRight() - 6.0f, r.getCentreY() }, 4.0f, true, col::blue);
+    }
+
+    // centre line for tune, knob value as a dotted guide
+    g.setColour (col::lcdInk.withAlpha (0.25f));
+    if (param == LTune) g.fillRect (glass.getX() + 4.0f, yFor (0.0f), glass.getWidth() - 8.0f, 1.0f);
+    const float ky = yFor (knob);
+    for (float x = glass.getX() + 6.0f; x < glass.getRight() - 6.0f; x += 6.0f)
+        g.fillRect (x, ky, 3.0f, 1.0f);
+
+    for (int s = 0; s < kNumSteps; ++s)
+    {
+        const auto x = kGridX + (float) s * kColPitch;
+        if (s > 0 && s % 4 == 0)
+        {
+            g.setColour (col::lcdInk.withAlpha (0.35f));
+            g.fillRect (x - (kColPitch - kCellW) * 0.5f - 0.5f, glass.getY() + 4.0f, 1.0f, glass.getHeight() - 8.0f);
+        }
+        juce::Path tri;
+        const float cx = x + kCellW * 0.5f, ty = kLcdTop + 4.0f;
+        tri.addTriangle (cx - 5.0f, ty, cx + 5.0f, ty, cx, ty + 7.0f);
+        g.setColour (col::lcdInk.withAlpha (s == playing ? 0.95f : 0.07f));
+        g.fillPath (tri);
+
+        const bool note = proc.patterns.cell (slot, voice + 1, s);
+        const bool active = s < len;
+        const float v = proc.patterns.getLock (slot, voice, param, s);
+        const float a = (note ? 1.0f : 0.45f) * (active ? 1.0f : 0.5f);
+        // a small square under each column where the drum plays
+        g.setColour (col::lcdInk.withAlpha (note ? 0.85f * a : 0.15f));
+        g.fillRect (x + kCellW * 0.5f - 3.0f, kBarBottom + 3.0f, 6.0f, 3.0f);
+        if (isLock (v))
+        {
+            const float y = yFor (v), base = param == LTune ? yFor (0.0f) : kBarBottom;
+            auto bar = juce::Rectangle<float> (x + 3.0f, juce::jmin (y, base), kCellW - 6.0f, juce::jmax (2.0f, std::abs (base - y)));
+            g.setColour (col::lcdInk.withAlpha (0.9f * a));
+            g.fillRect (bar);
+            g.setColour (col::lcdInk.withAlpha (a));
+            g.setFont (lcdFont (9.0f));
+            const float ty2 = juce::jlimit (kBarTop - 2.0f, kBarBottom - 12.0f, (param == LTune && v < 0.0f ? bar.getBottom() + 1.0f : bar.getY() - 12.0f));
+            g.drawText (lockText (param, v), juce::Rectangle<float> (x - 4.0f, ty2, kCellW + 8.0f, 11.0f), juce::Justification::centred);
+        }
+        else
+        {
+            g.setColour (col::lcdInk.withAlpha (0.12f * a + 0.05f));
+            g.fillRect (x + 6.0f, ky - 1.0f, kCellW - 12.0f, 3.0f);
+        }
+    }
+
+    // knob tabs
+    for (int i = 0; i < kNumLockParams; ++i)
+    {
+        if (i == LExtra && ! hasExtra (voice)) continue;
+        static const char* extraNames[kNumVoices] = { "ATTACK", "SNAPPY", "TAIL", "", "", "TONE" };
+        const auto r = tabRect (i);
+        if (i == param) drawKey (g, r, col::blueKey1, col::blueKey2, 3.0f, 2.0f);
+        else            drawKey (g, r, col::key1.darker (0.15f), col::key2.darker (0.15f), 3.0f, 2.0f);
+        g.setColour (juce::Colour (0xff1e1f20));
+        g.setFont (font (8.5f, true, 0.06f));
+        g.drawText (i == LExtra ? extraNames[voice] : kLockTabNames[i], r, juce::Justification::centred);
+    }
+    g.setColour (col::softPrint);
+    g.setFont (font (8.5f, false, 0.05f));
+    g.drawText ("drag a bar to lock  -  right-click to remove", juce::Rectangle<float> (glass.getRight() - 300.0f, 213.0f, 300.0f, 18.0f),
+                juce::Justification::centredRight);
+}
+
+int LockGrid::columnAt (float x) const
+{
+    const int c = (int) std::floor ((x - kGridX + (kColPitch - kCellW) * 0.5f) / kColPitch);
+    return juce::jlimit (0, kNumSteps - 1, c);
+}
+
+float LockGrid::valueAt (float y) const
+{
+    const float lo = lockMin (param), hi = lockMax (param);
+    float v = lo + (kBarBottom - y) / (kBarBottom - kBarTop) * (hi - lo);
+    v = juce::jlimit (lo, hi, v);
+    return param == LTune ? std::round (v * 10.0f) / 10.0f : std::round (v * 10.0f) / 10.0f;
+}
+
+void LockGrid::apply (int col, float y)
+{
+    const int slot = proc.getCurrentSlot();
+    const int from = lastCol < 0 ? col : lastCol;
+    for (int c = juce::jmin (from, col); c <= juce::jmax (from, col); ++c)
+        if (erasing) proc.patterns.clearLock (slot, voice, param, c);
+        else         proc.patterns.setLock (slot, voice, param, c, valueAt (y));
+    lastCol = col;
+    repaint();
+}
+
+void LockGrid::mouseDown (const juce::MouseEvent& e)
+{
+    for (int v = 0; v < kNumVoices; ++v)
+        if (voiceRect (v).contains (e.position)) { voice = v; if (param == LExtra && ! hasExtra (v)) param = LTune; repaint(); return; }
+    for (int i = 0; i < kNumLockParams; ++i)
+        if (tabRect (i).contains (e.position) && (i != LExtra || hasExtra (voice))) { param = i; repaint(); return; }
+    if (e.position.y < kLcdTop || e.position.y > kBarBottom + 8.0f || e.position.x < kGridX - 8.0f) return;
+
+    if (e.mods.isPopupMenu() && e.mods.isShiftDown())   // Shift-right-click: menu for clearing lanes
+    {
+        juce::PopupMenu m;
+        m.addItem (1, juce::String ("Clear ") + kLockVoiceNames[voice] + " " + (param == LExtra ? "extra" : juce::String (kLockTabNames[param]).toLowerCase()) + " locks");
+        m.addItem (2, juce::String ("Clear all ") + kLockVoiceNames[voice] + " locks");
+        m.addItem (3, "Clear every lock in this pattern");
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                         [safe = juce::Component::SafePointer<LockGrid> (this)] (int id)
+                         {
+                             if (safe == nullptr || id == 0) return;
+                             const int slot = safe->proc.getCurrentSlot();
+                             safe->proc.patterns.clearLocks (slot, id == 3 ? -1 : safe->voice, id == 1 ? safe->param : -1);
+                             safe->repaint();
+                         });
+        return;
+    }
+    dragging = true;
+    erasing = e.mods.isPopupMenu();
+    lastCol = -1;
+    apply (columnAt (e.position.x), e.position.y);
+}
+
+void LockGrid::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragging) apply (columnAt (e.position.x), e.position.y);
+}
+
+void LockGrid::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (e.position.y < kLcdTop || e.position.y > kBarBottom + 8.0f || e.position.x < kGridX - 8.0f) return;
+    proc.patterns.clearLock (proc.getCurrentSlot(), voice, param, columnAt (e.position.x));
     repaint();
 }
 
@@ -648,13 +847,32 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
     helpBtn.setToggleState (proc.showHelp.load(), juce::dontSendNotification);
     helpBtn.onClick = [this] { proc.showHelp = helpBtn.getToggleState(); tooltips.hideTip(); };
     helpBtn.setTooltip ("Help windows on/off. The knob value read-outs always show.");
-    helpBtn.setBounds (kMasterX + kMasterW - 62, 230, 54, 18);
+    helpBtn.setBounds (kWidth - kMargin - 54, 25, 54, 18);
     content.addAndMakeVisible (helpBtn);
     lcd.setBounds (kMasterX + 6, 150, kMasterW - 12, 30);
 
     // sequencer
     content.addAndMakeVisible (grid);
     grid.setBounds (0, kSeqY, 760, kHeight - kSeqY);
+    content.addAndMakeVisible (lockGrid);
+    lockGrid.setBounds (0, kSeqY, 760, kHeight - kSeqY);
+    lockGrid.setVisible (false);
+    lockGrid.setTooltip ("Parameter locks. Pick a drum on the left and a knob below, then drag a step's bar to lock that value "
+                         "for that step. Right-click or double-click a step to remove its lock; Shift-right-click for more.");
+
+    lockBtn.getProperties().set ("style", "small");
+    lockBtn.getProperties().set ("onColour", (juce::int64) col::blue.getARGB());
+    lockBtn.setClickingTogglesState (true);
+    lockBtn.onClick = [this]
+    {
+        const bool locks = lockBtn.getToggleState();
+        lockGrid.setVisible (locks);
+        grid.setVisible (! locks);
+    };
+    lockBtn.setTooltip ("Switch the screen between the steps and the parameter locks.");
+    lockBtn.setBounds (kMasterX + kMasterW - 78, 230, 70, 18);
+    content.addAndMakeVisible (lockBtn);
+
     grid.setTooltip ("Click a cell to set or clear a step; drag along a row to paint. AC = accent for every drum on that step.");
     content.addAndMakeVisible (patternPad);
     patternPad.setBounds (760, kSeqY, 240, 108);
@@ -784,7 +1002,7 @@ void Tross110Editor::paintPanel (juce::Graphics& g)
     g.drawText ("ANALOG-STYLE RHYTHM SYNTHESIZER", juce::Rectangle<float> ((float) kMargin + troW + numW + 14.0f, 24.0f, 400.0f, 16.0f),
                 juce::Justification::bottomLeft);
     g.setFont (font (10.0f, false, 0.2f));
-    g.drawText ("v" JucePlugin_VersionString, kWidth - kMargin - 200, 24, 200, 16, juce::Justification::bottomRight);
+    g.drawText ("v" JucePlugin_VersionString, kWidth - kMargin - 264, 24, 200, 16, juce::Justification::bottomRight);
     // thin blue rule
     g.setColour (col::blueDark);
     g.fillRect (kMargin, 50, kWidth - 2 * kMargin, 2);
@@ -849,7 +1067,10 @@ void Tross110Editor::timerCallback()
     const int sel = (int) proc.apvts.getRawParameterValue ("pattern")->load();
 
     if (v != lastVersion || st != lastStep || slot != lastSlot || len != lastLen)
-        grid.repaint();
+    {
+        if (grid.isVisible()) grid.repaint();
+        if (lockGrid.isVisible()) lockGrid.repaint();
+    }
     if (v != lastVersion) patternPad.repaint();   // empty-slot dashes follow the pads
     if (slot != lastSlot || pend != lastPending || pend >= 0 || sel != lastSel)
     {

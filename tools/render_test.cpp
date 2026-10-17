@@ -85,6 +85,25 @@ int main (int argc, char** argv)
         writeWav (dir + "/pattern.wav", out, sr);
     }
 
+    // parameter locks: a step with BD Tune locked to +12 st plays higher; the next plain step is back to the knob
+    {
+        const int sr = 48000;
+        Engine e; e.prepare (sr); SoundParams p; e.setParams (p);
+        uint16_t rows[kNumRows] {}; rows[1] = 0b11;   // BD on steps 1 and 2
+        float locks[kNumSteps][kNumVoices][kNumLockParams];
+        for (auto& a : locks) for (auto& b : a) for (auto& c : b) c = kNoLock;
+        locks[0][BD][LTune] = 12.0f;
+        auto zc = [&] (int step) {
+            e.sequencerStep (step, rows, true, locks[step]);
+            int z = 0; float prev = 0;
+            for (int i = 0; i < sr / 4; ++i) { const float v = e.tick(); if (i > 200 && (prev < 0) != (v < 0)) ++z; prev = v; }
+            return z;
+        };
+        const int locked = zc (0), plain = zc (1);
+        std::printf ("p-lock: BD zero crossings, locked +12 st %d, unlocked %d\n", locked, plain);
+        if (! (locked > plain * 1.6)) { std::printf ("P-LOCK CHECK FAILED\n"); ++fails; }
+    }
+
     // CPU: 10 s of every voice hitting on every 16th at 48 kHz
     {
         Engine e; e.prepare (48000); SoundParams p; e.setParams (p);

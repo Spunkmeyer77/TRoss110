@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../Source/PluginProcessor.h"
 #include "../Source/MidiExport.h"
+#include "../Source/PluginEditor.h"
 
 struct FakeHost : juce::AudioPlayHead
 {
@@ -296,6 +297,43 @@ int main (int argc, char** argv)
         pats.clear (3);
     }
 
+    // 6f. parameter locks: a BD step with Level locked to -inf is silent, the next one plays; saved and copied
+    {
+        using namespace tross110;
+        const int slot = proc.getCurrentSlot();
+        pats.clear (slot);
+        pats.setCell (slot, 1, 0, true); pats.setCell (slot, 1, 4, true);   // BD on steps 1 and 5
+        pats.setLock (slot, BD, LLevel, 0, -70.0f);
+        pats.setLock (slot, BD, LTune, 4, 7.5f);
+        check (pats.stepHasLock (slot, BD, 0) && pats.hasAnyLock (slot), "locks stored on BD steps 1 and 5");
+        run (600);   // quiet
+        host.playing = true; host.ppq = 0.0;
+        float p1 = 0, p2 = 0;
+        for (int b = 0; b < 200; ++b)   // 2 s: step 1 at 0 s, step 5 at 0.5 s
+        {
+            juce::MidiBuffer m; proc.processBlock (buf, m);
+            host.ppq += block / sr * host.bpm / 60.0;
+            for (int i = 0; i < block; ++i)
+            {
+                const float v = std::abs (buf.getSample (0, i));
+                if (b < 45) p1 = juce::jmax (p1, v); else if (b >= 50 && b < 95) p2 = juce::jmax (p2, v);
+            }
+        }
+        host.playing = false; run (2);
+        check (p1 < 1e-4f && p2 > 0.02f, ("Level lock -inf silences step 1 only (step 1 " + juce::String (p1, 5) + ", step 5 " + juce::String (p2, 3) + ")").toRawUTF8());
+
+        juce::MemoryBlock st; proc.getStateInformation (st);
+        Tross110Processor other;
+        other.setStateInformation (st.getData(), (int) st.getSize());
+        check (std::abs (other.patterns.getLock (slot, BD, LTune, 4) - 7.5f) < 0.01f && other.patterns.getLock (slot, BD, LLevel, 0) <= -69.9f
+               && ! isLock (other.patterns.getLock (slot, BD, LTune, 0)), "locks saved and restored with the project");
+        pats.copySlot (slot, 9);
+        check (std::abs (pats.getLock (9, BD, LTune, 4) - 7.5f) < 0.01f, "Copy to copies the locks too");
+        pats.clear (9);
+        check (! pats.hasAnyLock (9), "Clear removes the locks");
+        pats.clearLock (slot, BD, LLevel, 0);   // keep step 5's tune lock for the snapshot
+    }
+
     // 7. state round trip
     juce::MemoryBlock state; proc.getStateInformation (state);
     {
@@ -345,6 +383,29 @@ int main (int argc, char** argv)
         check (b.getWidth() > 60 && b.getHeight() > 20, "help window has room for its text");
         auto f = outDir.getChildFile ("tooltip.png"); f.deleteFile();
         if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
+    }
+    {   // the parameter-lock screen
+        LockGrid* lg = nullptr; StepGrid* sg = nullptr;
+        std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+        {
+            for (auto* ch : c.getChildren())
+            {
+                if (auto* l = dynamic_cast<LockGrid*> (ch)) lg = l;
+                if (auto* g2 = dynamic_cast<StepGrid*> (ch)) sg = g2;
+                find (*ch);
+            }
+        };
+        find (*ed);
+        check (lg != nullptr && sg != nullptr && ! lg->isVisible(), "lock screen exists and starts hidden");
+        if (lg && sg)
+        {
+            const int slot = proc.getCurrentSlot();
+            for (int s = 0; s < 16; s += 2) pats.setLock (slot, tross110::BD, tross110::LTune, s, (float) (s - 6));
+            lg->setVisible (true); sg->setVisible (false);
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto f = outDir.getChildFile ("editor_locks.png"); f.deleteFile();
+            if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
+        }
     }
     ed.reset();
 

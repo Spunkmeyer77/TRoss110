@@ -111,7 +111,8 @@ s += [table([
                "tails ringing under it - which also drives the output into grit. 0 % turns accents off."],
     ["VOLUME", "Main output level. Drums on their own outputs are not affected."],
     ["Display", "Shows the playing pattern, and the queued one (for example PAT 01 > 04)."],
-    ["HELP", "Help windows on/off. With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
+    ["P-LOCK", "Switches the screen between the step grid and the parameter locks (section 3.1)."],
+    ["HELP (top right)", "Help windows on/off. With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
              "show either way. The setting is saved with your song."],
     ["PLAY / BPM", "Standalone app only: start/stop and tempo (drag the read-out up or down)."],
 ], [30 * mm, W - 30 * mm])]
@@ -142,6 +143,23 @@ s += [table([
                     "own .mid file, or the chain as one file. Or drag the key straight onto a MIDI track to drop the playing pattern in as a clip."],
 ], [30 * mm, W - 30 * mm])]
 s += [Spacer(1, 6), P("All twelve patterns and the chain are saved with your song, together with every knob.")]
+
+s += [Paragraph("3.1  Parameter locks", h2),
+      P("Any step can play a drum with different knob settings: a higher snare, a shorter hat, a quieter kick. Press <b>P-LOCK</b> "
+        "(master section) to swap the step grid for the lock screen; press it again to go back."),
+      table([
+          ["Control", "What it does"],
+          ["Drum (left)", "Choose which drum's locks you see: BD, SD, HC, CH, OH, CY. A blue dot means that drum has locks."],
+          ["Knob tabs (below)", "TUNE, DECAY, LEVEL, and the drum's extra knob (ATTACK, SNAPPY, TAIL or TONE)."],
+          ["Bars", "Drag a step's bar up or down to lock that value; drag across steps to draw several. The dotted line is "
+                   "the knob's current setting. Small squares under the bars show the steps where the drum plays."],
+          ["Right-click / double-click", "Remove the lock on a step (right-drag removes across steps)."],
+          ["Shift-right-click", "Clear this knob's locks, all of this drum's locks, or every lock in the pattern."],
+      ], [36 * mm, W - 36 * mm]),
+      Spacer(1, 6),
+      P("A lock holds for that hit's whole sound; the next hit without a lock goes back to the knobs. Notes you play live always use "
+        "the knobs. On the step grid, a small corner mark shows steps that carry locks. Locks are copied with Copy to, removed by "
+        "Clear, and saved with your song. MIDI export writes the notes only.")]
 
 s += [Paragraph("4  Playing from MIDI", h1),
       P("TRoss 110 listens on all MIDI channels. Velocities up to 100 set the level of the hit; anything above 100 also fires "

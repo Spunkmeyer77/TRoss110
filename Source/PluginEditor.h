@@ -46,6 +46,29 @@ private:
     bool hit (juce::Point<float>, int& row, int& step) const;
 };
 
+// Parameter-lock screen, drawn over the step grid: choose a drum (left) and a knob (tabs below), then
+// drag each step's bar to lock that knob's value for that step. Right-click / double-click removes a lock.
+class LockGrid : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit LockGrid (Tross110Processor& p) : proc (p) { setOpaque (true); }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override { dragging = false; lastCol = -1; }
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+    int voice = 0, param = 0;
+private:
+    Tross110Processor& proc;
+    bool dragging = false, erasing = false;
+    int lastCol = -1;
+    int columnAt (float x) const;
+    float valueAt (float y) const;
+    void apply (int col, float y);
+    static juce::Rectangle<float> tabRect (int i);
+    static juce::Rectangle<float> voiceRect (int v);
+};
+
 // 12 pattern keys, 4 across x 3 down. LED = slot playing (blinks when queued), light cap = selected.
 // A drum's black name strip, played like a pad: click = hit, Shift-click = accented hit
 class NameStrip : public juce::Component, public juce::SettableTooltipClient
@@ -134,6 +157,8 @@ private:
     TrossLookAndFeel lnf;
     Content content { *this };
     StepGrid grid { proc };
+    LockGrid lockGrid { proc };
+    juce::TextButton lockBtn { "P-LOCK" };
     PatternPad patternPad { proc };
     StatusLcd lcd { proc };
     std::vector<std::unique_ptr<NameStrip>> strips;

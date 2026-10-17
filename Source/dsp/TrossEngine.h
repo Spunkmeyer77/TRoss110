@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 
 namespace tross110
 {
@@ -40,6 +41,27 @@ struct SoundParams
     bool ownOut[kNumVoices] {};   // true = the drum leaves the main mix and plays on its own output
 };
 
+// ---- parameter locks: per pattern, per drum, per step, 4 lockable knobs
+enum LockParam { LTune, LDecay, LLevel, LExtra, kNumLockParams };
+inline bool hasExtra (int voice) { return voice != CH && voice != OH; }
+inline float lockMin (int param) { return param == LTune ? -12.0f : param == LLevel ? -70.0f : 0.0f; }
+inline float lockMax (int param) { return param == LTune ? 12.0f : param == LLevel ? 6.0f : 100.0f; }
+inline bool isLock (float v) { return v == v; }   // NaN = no lock
+constexpr float kNoLock = std::numeric_limits<float>::quiet_NaN();
+
+// the knob a lock replaces, in the sound parameters
+inline float& knobRef (SoundParams& p, int voice, int param)
+{
+    switch (param)
+    {
+        case LTune:  return p.tune[voice];
+        case LDecay: return p.decay[voice];
+        case LLevel: return p.lvl[voice];
+        default:     return voice == BD ? p.bdAttack : voice == SD ? p.sdSnappy : voice == CP ? p.cpTail : p.cyTone;
+    }
+}
+inline float knobValue (const SoundParams& p, int voice, int param) { return knobRef (const_cast<SoundParams&> (p), voice, param); }
+
 // 12 slots x 7 rows x 16 steps, one 16-bit mask per row. Edited from the UI thread,
 // read and recorded into from the audio thread, so every row is atomic.
 class PatternMemory
@@ -54,8 +76,41 @@ public:
         m = on ? (uint16_t) (m | (1u << step)) : (uint16_t) (m & ~(1u << step));
         set (slot, row, m);
     }
-    void clear (int slot) { for (int r = 0; r < kNumRows; ++r) set (slot, r, 0); }
-    void copySlot (int from, int to) { for (int r = 0; r < kNumRows; ++r) set (to, r, get (from, r)); }
+    PatternMemory()
+    {
+        for (auto& a : locks) for (auto& b : a) for (auto& c : b) for (auto& d : c) d.store (kNoLock);
+    }
+
+    // locks: NaN = none
+    float getLock (int slot, int voice, int param, int step) const { return locks[slot][voice][param][step].load (std::memory_order_relaxed); }
+    void setLock (int slot, int voice, int param, int step, float v) { locks[slot][voice][param][step].store (v, std::memory_order_relaxed); ++version; }
+    void clearLock (int slot, int voice, int param, int step)       { setLock (slot, voice, param, step, kNoLock); }
+    bool stepHasLock (int slot, int voice, int step) const
+    {
+        for (int p = 0; p < kNumLockParams; ++p) if (isLock (getLock (slot, voice, p, step))) return true;
+        return false;
+    }
+    bool hasAnyLock (int slot) const
+    {
+        for (int v = 0; v < kNumVoices; ++v) for (int s = 0; s < kNumSteps; ++s) if (stepHasLock (slot, v, s)) return true;
+        return false;
+    }
+    void clearLocks (int slot, int voice, int param)   // one drum's lane; voice/param -1 = all
+    {
+        for (int v = 0; v < kNumVoices; ++v) for (int p = 0; p < kNumLockParams; ++p)
+            if ((voice < 0 || v == voice) && (param < 0 || p == param))
+                for (int s = 0; s < kNumSteps; ++s) locks[slot][v][p][s].store (kNoLock, std::memory_order_relaxed);
+        ++version;
+    }
+
+    void clear (int slot) { for (int r = 0; r < kNumRows; ++r) set (slot, r, 0); clearLocks (slot, -1, -1); }
+    void copySlot (int from, int to)
+    {
+        for (int r = 0; r < kNumRows; ++r) set (to, r, get (from, r));
+        for (int v = 0; v < kNumVoices; ++v) for (int p = 0; p < kNumLockParams; ++p) for (int s = 0; s < kNumSteps; ++s)
+            locks[to][v][p][s].store (getLock (from, v, p, s), std::memory_order_relaxed);
+        ++version;
+    }
     bool isEmpty (int slot) const
     {
         for (int r = 1; r < kNumRows; ++r)   // the accent row alone plays nothing
@@ -66,6 +121,7 @@ public:
 
 private:
     std::atomic<uint16_t> masks[kNumSlots][kNumRows] {};
+    std::atomic<float> locks[kNumSlots][kNumVoices][kNumLockParams][kNumSteps];
     std::atomic<int> version { 0 };
 };
 
@@ -238,11 +294,32 @@ public:
         for (auto& g : gainNow) g = 0.0;
         smooth = dsp::tauCoef (fs, 0.01);
         dirty = true;
-        setParams (params);
+        apply();
     }
 
-    void setParams (const SoundParams& p)
+    void setParams (const SoundParams& p) { knobs = p; apply(); }
+
+    // locks for one drum's next sound (NaN = use the knob); they hold until that drum's next hit
+    void setVoiceLocks (int voice, const float* vals)
     {
+        bool diff = false;
+        for (int q = 0; q < kNumLockParams; ++q)
+            if (isLock (vals[q]) != isLock (lockVal[voice][q]) || (isLock (vals[q]) && vals[q] != lockVal[voice][q])) diff = true;
+        if (! diff) return;
+        for (int q = 0; q < kNumLockParams; ++q) lockVal[voice][q] = vals[q];
+        apply();
+        gainNow[voice] = gainTarget[voice];   // a locked level starts with the hit, not ramped
+    }
+    void clearVoiceLocks (int voice) { const float none[kNumLockParams] { kNoLock, kNoLock, kNoLock, kNoLock }; setVoiceLocks (voice, none); }
+
+private:
+    // the knobs with this hit's locks on top
+    void apply()
+    {
+        SoundParams p = knobs;
+        for (int v = 0; v < kNumVoices; ++v)
+            for (int q = 0; q < kNumLockParams; ++q)
+                if (isLock (lockVal[v][q]) && (q != LExtra || hasExtra (v))) knobRef (p, v, q) = lockVal[v][q];
         const bool changed = dirty
             || p.tune[BD] != params.tune[BD] || p.tune[SD] != params.tune[SD] || p.tune[CP] != params.tune[CP]
             || p.tune[CH] != params.tune[CH] || p.tune[OH] != params.tune[OH] || p.tune[CY] != params.tune[CY]
@@ -303,21 +380,30 @@ public:
         }
     }
 
+public:
+
     // a hit from the keyboard or a pad (velocity 1..127; above 100 also fires the accent)
     void trigger (int voice, int velocity)
     {
+        clearVoiceLocks (voice);   // live hits play the knobs
         if (velocity > 100) fireAccent();
         hit (voice, dsp::vel (velocity));
     }
 
     // the sequencer reached `step`; rows are this pattern's masks (row 0 = accent). The hardware
     // has no velocity: every step plays at the same level, accented steps go through the accent.
-    void sequencerStep (int step, const uint16_t* rows, bool seqOn)
+    // locks (optional) = this step's values, [voice][param], NaN = none.
+    void sequencerStep (int step, const uint16_t* rows, bool seqOn, const float (*locks)[kNumLockParams] = nullptr)
     {
         if (! seqOn) return;
         if ((rows[0] >> step) & 1) fireAccent();
         for (int v = 0; v < kNumVoices; ++v)
-            if ((rows[v + 1] >> step) & 1) hit (v, 1.0);
+            if ((rows[v + 1] >> step) & 1)
+            {
+                if (locks != nullptr) setVoiceLocks (v, locks[v]);
+                else                  clearVoiceLocks (v);
+                hit (v, 1.0);
+            }
     }
 
     void setOwnOut (int voice, bool on) { ownOut[voice] = on; }
@@ -360,7 +446,10 @@ public:
 
 private:
     double fs = 48000.0;
-    SoundParams params;
+    SoundParams knobs, params;   // params = knobs + locks
+    float lockVal[kNumVoices][kNumLockParams] { { kNoLock, kNoLock, kNoLock, kNoLock }, { kNoLock, kNoLock, kNoLock, kNoLock },
+                                                { kNoLock, kNoLock, kNoLock, kNoLock }, { kNoLock, kNoLock, kNoLock, kNoLock },
+                                                { kNoLock, kNoLock, kNoLock, kNoLock }, { kNoLock, kNoLock, kNoLock, kNoLock } };
     bool dirty = true;
 
     dsp::ShiftNoise noise;

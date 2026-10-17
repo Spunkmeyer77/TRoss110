@@ -174,7 +174,10 @@ void Tross110Processor::doStep (int step, long long absStep, int len, bool seqOn
     const int slot = currentSlot.load();
     uint16_t rows[kNumRows];
     for (int r = 0; r < kNumRows; ++r) rows[r] = patterns.get (slot, r);
-    engine.sequencerStep (step, rows, seqOn);
+    float locks[kNumVoices][kNumLockParams];
+    for (int v = 0; v < kNumVoices; ++v)
+        for (int q = 0; q < kNumLockParams; ++q) locks[v][q] = patterns.getLock (slot, v, q, step);
+    engine.sequencerStep (step, rows, seqOn, locks);
     playStep = step;
 }
 
@@ -330,6 +333,12 @@ void Tross110Processor::getStateInformation (juce::MemoryBlock& destData)
         juce::StringArray rows;
         for (int r = 0; r < kNumRows; ++r) rows.add (juce::String::toHexString ((int) patterns.get (s, r)));
         pats.setProperty ("slot" + juce::String (s), rows.joinIntoString (" "), nullptr);
+        // locks as "voice:param:step=value" entries
+        juce::StringArray lk;
+        for (int v = 0; v < kNumVoices; ++v) for (int q = 0; q < kNumLockParams; ++q) for (int st = 0; st < kNumSteps; ++st)
+            if (const float val = patterns.getLock (s, v, q, st); isLock (val))
+                lk.add (juce::String (v) + ":" + juce::String (q) + ":" + juce::String (st) + "=" + juce::String (val, 3));
+        if (! lk.isEmpty()) pats.setProperty ("locks" + juce::String (s), lk.joinIntoString (" "), nullptr);
     }
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, destData);
 }
@@ -348,6 +357,17 @@ void Tross110Processor::setStateInformation (const void* data, int sizeInBytes)
             rows.addTokens (pats.getProperty ("slot" + juce::String (s)).toString(), " ", "");
             for (int r = 0; r < kNumRows; ++r)
                 patterns.set (s, r, (uint16_t) (r < rows.size() ? rows[r].getHexValue32() & 0xffff : 0));
+            patterns.clearLocks (s, -1, -1);
+            juce::StringArray lk;
+            lk.addTokens (pats.getProperty ("locks" + juce::String (s)).toString(), " ", "");
+            for (auto& t : lk)
+            {
+                juce::StringArray a; a.addTokens (t.upToFirstOccurrenceOf ("=", false, false), ":", "");
+                if (a.size() != 3) continue;
+                const int v = a[0].getIntValue(), q = a[1].getIntValue(), st = a[2].getIntValue();
+                if (v < 0 || v >= kNumVoices || q < 0 || q >= kNumLockParams || st < 0 || st >= kNumSteps) continue;
+                patterns.setLock (s, v, q, st, juce::jlimit (lockMin (q), lockMax (q), t.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
+            }
         }
         state.removeChild (pats, nullptr);
     }

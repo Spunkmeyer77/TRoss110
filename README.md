@@ -23,7 +23,8 @@ The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 | PATTERN 1–12 | 12 pattern slots. While playing, a new slot waits until the current pattern reaches step 1. While stopped, it switches immediately. The LED shows which slot is playing; a blinking LED shows the slot that's queued |
 | Pattern keys, right-click | **Copy to** another slot, **Clear**, or edit the chain. A dash on a key means that slot is empty |
 | Pattern chain | **Shift-click** pattern keys to chain them (up to 32 steps, one pattern per bar). The chain follows the song position, so jumps and loops land on the right pattern. Dim LEDs = in the chain; the display shows `CHN step/length`. A plain click ends the chain. Saved with the project |
-| HELP | Help windows on/off (the knob value read-outs always show). Saved with the project |
+| P-LOCK | Switches the screen between the step grid and the **parameter-lock** screen: pick a drum (left) and a knob (Tune, Decay, Level or the drum's extra knob, below), then drag each step's bar to lock that value for that step. Right-click or double-click removes a lock; Shift-right-click clears a lane, a drum or the whole pattern. A lock lasts for that hit's sound; live notes use the knobs. Locked steps show a corner mark on the step grid. Copied, cleared and saved with the pattern |
+| HELP (top right) | Help windows on/off (the knob value read-outs always show). Saved with the project |
 | EXPORT MIDI | Click for a menu: export the playing pattern, all patterns in a row, all patterns as separate `.mid` files, or the chain. Drag the key onto a MIDI track to drop the playing pattern in as a clip. Steps are 16th notes, accented steps velocity 127, channel 10 |
 
 **Keyboard map (Ableton note names, C1 = MIDI 36):** BD C1/B0 · SD D1/E1/C#1 · HC D#1 · CH F#1/G#1 · OH A#1 ·
