@@ -163,7 +163,11 @@ private:
     {
         explicit Content (Tross110Editor& e) : ed (e) { setOpaque (true); }
         void paint (juce::Graphics& g) override { ed.paintPanel (g); }
-        void mouseDown (const juce::MouseEvent& e) override { if (logoArea().contains (e.getPosition())) ed.showAbout(); }
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (logoArea().contains (e.getPosition())) ed.showAbout();
+            else if (e.getPosition().y < 50) ed.toggleSize();   // click the top strip: 100 % <-> smaller
+        }
         void mouseMove (const juce::MouseEvent& e) override
         {
             setMouseCursor (logoArea().contains (e.getPosition()) ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
@@ -196,6 +200,11 @@ private:
     AboutBox about;
 public:
     void showAbout() { about.setVisible (true); about.toFront (false); }
+    void toggleSize()
+    {
+        if (getWidth() != kWidth) setSize (kWidth, kHeight);              // back to 100 %
+        else                      setSize (kWidth * 3 / 4, kHeight * 3 / 4);   // smaller (75 %)
+    }
 private:
 
     int lastVersion = -1, lastStep = -2, lastSlot = -1, lastPending = -2, lastLen = -1, lastSel = -1, lastChain = -1;

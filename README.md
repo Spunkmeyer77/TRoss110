@@ -3,9 +3,9 @@
 110-style analog drum machine with a 16-step sequencer (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026.
 
 Six voices: bass drum, snare, hand clap, closed hat, open hat and cymbal, plus a global accent.
-Defaults: BD Decay 24.1 %, Level -8.4 dB · SD Decay 43.9 %, Snappy 60 % · Clap Tune +2.6 st, Decay 20.3 %, Level -3.6 dB, Tail 25.2 %.
+Defaults: BD Decay 27.8 %, Level -8.4 dB · SD Decay 43.9 %, Snappy 60 % · Clap Tune +2.6 st, Decay 30 %, Level -3.6 dB, Tail 15 %.
 
-The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
+The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf). What changed in each version: [`docs/TRoss110-History.pdf`](docs/TRoss110-History.pdf).
 
 ## Using it
 
@@ -25,7 +25,7 @@ The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 | Pattern chain | **Shift-click** pattern keys to chain them (up to 32 steps, one pattern per bar). The chain follows the song position, so jumps and loops land on the right pattern. Dim LEDs = in the chain; the display shows `CHN step/length`. A plain click ends the chain. Saved with the project |
 | P-LOCK | Switches the screen between the step grid and the **parameter-lock** screen: pick a drum (left) and a knob (Tune, Decay, Level or the drum's extra knob, below), then drag each step's bar to lock that value for that step. Right-click or double-click removes a lock; Shift-right-click clears a lane, a drum or the whole pattern. A lock lasts for that hit's sound; live notes use the knobs. Locked steps show a corner mark on the step grid. Copied, cleared and saved with the pattern |
 | Logo | Click the TRoss 110 logo for the About window: version, the main shortcuts and the contact address |
-| HELP (top right) | Help windows on/off (the knob value read-outs always show). Saved with the project |
+| HELP (top right) | Help windows on/off (the knob value read-outs always show). Off by default; saved with the project |
 | EXPORT MIDI | Click for a menu: export the playing pattern, all patterns in a row, all patterns as separate `.mid` files, or the chain. Drag the key onto a MIDI track to drop the playing pattern in as a clip. Steps are 16th notes, accented steps velocity 127, channel 10 |
 
 **Keyboard map (Ableton note names, C1 = MIDI 36):** BD C1/B0 · SD D1/E1/C#1 · HC D#1 · CH F#1/G#1 · OH A#1 ·
@@ -33,7 +33,7 @@ CY C#2/D#2/E2/F2/G2/A2.
 
 Velocity: velocities up to 100 scale the level, and anything above 100 also fires the Accent.
 
-All 12 patterns are saved with your Live set, along with every knob. The window can be resized from its corner.
+All 12 patterns are saved with your Live set, along with every knob. The window can be resized from its corner, or click the top strip of the panel to switch between 100 % and a smaller 75 % size.
 
 ## Outputs
 
@@ -81,7 +81,7 @@ tests on Linux. The files appear under the run's **Artifacts** on the **Actions*
 
 | Platform | Files |
 |---|---|
-| macOS | `TRoss110-<v>-macOS.pkg` (AU + VST3 + app) with `TRoss110-<v>-Manual.pdf`, plus AU and VST3 zips |
+| macOS | `TRoss110-<v>-macOS.pkg` (AU + VST3 + app) with `TRoss110-<v>-Manual.pdf` and `TRoss110-<v>-History.pdf`, plus AU and VST3 zips |
 | Windows | `TRoss110-<v>-Windows-Setup.exe` (VST3 + app), plus a VST3 zip |
 | Linux | `TRoss110-<v>-Linux-x86_64.tar.gz` (VST3 + LV2 + app, with `install.sh`) |
 

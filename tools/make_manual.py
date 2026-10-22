@@ -85,7 +85,8 @@ s += [Spacer(1, 6),
 
 s += [Paragraph("2  The panel", h1),
       P("The upper half holds the six drum channels and the master section. The lower half is the sequencer: the LCD step "
-        "grid on the left, the pattern keys and transport keys on the right. The window can be resized from its bottom-right "
+        "grid on the left, the pattern keys and transport keys on the right. Click the top strip of the panel to switch between 100 % "
+        "and a smaller 75 % size, or resize the window from its bottom-right "
         "corner. Hover over a knob or drag it to see its value; double-click a knob to reset it.")]
 
 s += [Paragraph("2.1  Drum channels", h2)]
@@ -113,7 +114,7 @@ s += [table([
     ["Display", "Shows the playing pattern, and the queued one (for example PAT 01 > 04)."],
     ["Logo", "Click the TRoss 110 logo (top left) for the About window: the version, the main shortcuts and the contact address. Click anywhere to close it."],
     ["P-LOCK", "Switches the screen between the step grid and the parameter locks (section 3.1)."],
-    ["HELP (top right)", "Help windows on/off. With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
+    ["HELP (top right)", "Help windows on/off (off by default). With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
              "show either way. The setting is saved with your song."],
     ["PLAY / BPM", "Standalone app only: start/stop and tempo (drag the read-out up or down)."],
 ], [30 * mm, W - 30 * mm])]

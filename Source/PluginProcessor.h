@@ -76,7 +76,7 @@ public:
     std::atomic<float> internalBpm { 120.0f };
 
     // HELP key: help windows on/off (saved with the project; knob value read-outs always show)
-    std::atomic<bool> showHelp { true };
+    std::atomic<bool> showHelp { false };
 
     // the song tempo seen in the last audio block (used for MIDI export)
     std::atomic<double> currentBpm { 120.0 };

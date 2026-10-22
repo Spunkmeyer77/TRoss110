@@ -118,6 +118,7 @@ fi
 rm -rf "$WORK"
 # the manual goes out next to the installer
 cp docs/TRoss110-Manual.pdf "$OUT/TRoss110-$VERSION-Manual.pdf"
+cp docs/TRoss110-History.pdf "$OUT/TRoss110-$VERSION-History.pdf"
 echo "==> Done: $PKG (+ TRoss110-$VERSION-Manual.pdf)"
 [ -z "$DEV_ID_INSTALLER" ] && echo "    (unsigned: other Macs will show a Gatekeeper warning on first open)"
 exit 0

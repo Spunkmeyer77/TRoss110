@@ -41,9 +41,10 @@ int main (int argc, char** argv)
     std::printf ("params: %d\n", (int) proc.getParameters().size());
     auto pv = [&] (const char* id) { return proc.apvts.getRawParameterValue (id)->load(); };
     auto near = [] (float a, float b) { return std::abs (a - b) < 0.01f; };
-    check (near (pv ("bd_decay"), 24.1f) && near (pv ("bd_lvl"), -8.4f) && near (pv ("sd_decay"), 43.9f) && near (pv ("sd_snappy"), 60.0f)
-           && near (pv ("cp_tune"), 2.6f) && near (pv ("cp_decay"), 20.3f) && near (pv ("cp_lvl"), -3.6f) && near (pv ("cp_tail"), 25.2f),
-           "defaults: BD Decay 24.1 %, Level -8.4 dB; SD Decay 43.9 %, Snappy 60 %; CP Tune 2.6 st, Decay 20.3 %, Level -3.6 dB, Tail 25.2 %");
+    check (near (pv ("bd_decay"), 27.8f) && near (pv ("bd_lvl"), -8.4f) && near (pv ("sd_decay"), 43.9f) && near (pv ("sd_snappy"), 60.0f)
+           && near (pv ("cp_tune"), 2.6f) && near (pv ("cp_decay"), 30.0f) && near (pv ("cp_lvl"), -3.6f) && near (pv ("cp_tail"), 15.0f)
+           && ! proc.showHelp.load(),
+           "defaults: BD Decay 27.8 %, Level -8.4 dB; SD Decay 43.9 %, Snappy 60 %; CP Tune 2.6 st, Decay 30 %, Level -3.6 dB, Tail 15 %; HELP off");
     check (proc.apvts.getParameter ("pattern")->getNumSteps() == 12, "12 pattern slots");
     std::printf ("BD Decay shows as \"%s\"\n", proc.apvts.getParameter ("bd_decay")->getCurrentValueAsText().toRawUTF8());
 
@@ -277,13 +278,13 @@ int main (int argc, char** argv)
         run (60);
         check (proc.getCurrentSlot() == 1 && proc.getChainPos() == 1, "after a jump the chain lands on the right pattern");
 
-        proc.showHelp = false;
+        proc.showHelp = true;
         juce::MemoryBlock st; proc.getStateInformation (st);
         Tross110Processor other;
         other.setStateInformation (st.getData(), (int) st.getSize());
         check (other.getChainLength() == 2 && other.getChain() == std::vector<int> ({ 3, 1 }), "chain saved and restored with the project");
-        check (! other.showHelp.load(), "HELP off is saved with the project");
-        proc.showHelp = true;
+        check (other.showHelp.load(), "HELP on is saved with the project");
+        proc.showHelp = false;
 
         auto chainMidi = tross110::MidiExport::make (pats, proc.getChain(), len, 120.0, "chain");
         double endTick = 0;
@@ -423,6 +424,11 @@ int main (int argc, char** argv)
             if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
             check (ab->isVisible(), "clicking the logo opens About");
             ab->setVisible (false);
+            const int w0 = ed->getWidth();
+            te->toggleSize(); const int w1 = ed->getWidth();
+            te->toggleSize(); const int w2 = ed->getWidth();
+            check (w0 == 1000 && w1 == 750 && w2 == 1000, ("top-strip click: 100 % -> 75 % -> 100 % (" + juce::String (w0) + ", "
+                   + juce::String (w1) + ", " + juce::String (w2) + ")").toRawUTF8());
         }
     }
 

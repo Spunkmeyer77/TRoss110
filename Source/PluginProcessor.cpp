@@ -376,7 +376,7 @@ void Tross110Processor::setStateInformation (const void* data, int sizeInBytes)
     currentSlot = pats.isValid() ? juce::jlimit (0, kNumSlots - 1, (int) pats.getProperty ("current", sel)) : sel;
     pendingSlot = -1;
     lastPatternParam = sel;
-    if (pats.isValid()) showHelp = (bool) pats.getProperty ("help", true);
+    if (pats.isValid()) showHelp = (bool) pats.getProperty ("help", false);
     {
         juce::StringArray ch;
         ch.addTokens (pats.isValid() ? pats.getProperty ("chain").toString() : juce::String(), " ", "");
