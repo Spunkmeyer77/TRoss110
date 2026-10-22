@@ -286,7 +286,7 @@ public:
         for (auto& m : metalCh.sq) m = {};
         for (auto& m : metalOh.sq) m = {};
         for (auto& m : metalCy.sq) m = {};
-        chF = {}; ohF = {}; cyHi = {}; cyLo = {}; cpBp.reset();
+        chF = {}; ohF = {}; cyHi = {}; cyLo = {}; cpBp.reset(); cpTailBp.reset(); cpTailLp = {};
         for (auto& h : dcBlock) { h = {}; h.set (18.0, fs); }
         bdPulseLp = {}; sdSnapHp = {}; sdSnapLp = {}; metalHp = {};
         bdPulseLeft = sdPulseLeft = 0;
@@ -353,7 +353,7 @@ private:
         cyLow.coef  = dsp::tauCoef (fs, 0.467 * df (CY));
         cpShortCoef = dsp::tauCoef (fs, 0.0035);
         cpLastCoef  = dsp::tauCoef (fs, 0.047 * df (CP));
-        cpTail.coef = dsp::tauCoef (fs, 0.233 * df (CP));
+        cpTail.coef = dsp::tauCoef (fs, 0.30 * df (CP));   // RC discharge; the VCA cuts it off well before it ends
         accEnv.coef = dsp::tauCoef (fs, 0.040);
         bdWhack = p.bdAttack / 100.0 * 1.6;
         sdSnappy = p.sdSnappy / 100.0 * 1.6;
@@ -376,6 +376,8 @@ private:
             sdSnapHp.set (1800.0 * dsp::semis (p.tune[SD] * 0.5), fsr);
             sdSnapLp.set (11000.0, fsr);
             cpBp.set (910.0 * dsp::semis (p.tune[CP]), 3.2, fsr);
+            cpTailBp.set (820.0 * dsp::semis (p.tune[CP]), 2.0, fsr);   // the tail: a little lower and wider
+            cpTailLp.set (3200.0 * dsp::semis (p.tune[CP] * 0.5), fsr);  // and darker
             metalHp.set (120.0, fsr);
         }
     }
@@ -467,7 +469,7 @@ private:
     double chCoef = 0.99, ohCoef = 0.999, cyTingAmt = 1, cyBodyAmt = 1;
     bool ohChoked = false;
     // clap
-    dsp::Svf cpBp; dsp::Env cpHit, cpTail;
+    dsp::Svf cpBp, cpTailBp; dsp::OnePole cpTailLp; dsp::Env cpHit, cpTail;
     int cpClock = -1; double cpLevel = 1, cpShortCoef = 0.99, cpLastCoef = 0.999, cpTailAmt = 0.45;
     // accent + output
     dsp::Env accEnv; double accentAmt = 0.5;
@@ -484,7 +486,7 @@ private:
         {
             case BD: bdPulseLeft = (int) (fs * 0.001); bdPulseLevel = level; bdEnvPitch.coef = dsp::tauCoef (fs, 0.007); bdEnvPitch.trigger (1.0); break;
             case SD: sdPulseLeft = (int) (fs * 0.001); sdPulseLevel = level; sdSnap.trigger (level); break;
-            case CP: cpClock = 0; cpLevel = level; break;
+            case CP: cpClock = 0; cpLevel = level; cpTail.trigger (level); break;   // the tail envelope starts with the hits
             case CH: chEnv.trigger (level); ohChoked = true; ohEnv.coef = dsp::tauCoef (fs, 0.004); break;   // closed hat cuts the open hat
             case OH: ohChoked = false; ohEnv.coef = ohCoef; ohEnv.trigger (level); break;
             case CY: cyTing.trigger (level); cyBody.trigger (level); cyLow.trigger (level * 0.45); break;
@@ -530,11 +532,17 @@ private:
         {
             const int ms10 = (int) (fs * 0.010);
             if (cpClock == 0 || cpClock == ms10 || cpClock == 2 * ms10) { cpHit.coef = cpShortCoef; cpHit.e = 0; cpHit.trigger (cpLevel); }
-            if (cpClock == 3 * ms10) { cpHit.coef = cpLastCoef; cpHit.e = 0; cpHit.trigger (cpLevel); cpTail.trigger (cpLevel * cpTailAmt); cpClock = -2; }
+            if (cpClock == 3 * ms10) { cpHit.coef = cpLastCoef; cpHit.e = 0; cpHit.trigger (cpLevel); cpClock = -2; }
             if (cpClock >= 0) ++cpClock;
         }
         double cl, cb;
-        cpBp.tick (n * (cpHit.tick() + cpTail.tick()), cl, cb);
+        // transistor VCA: no output below its threshold, so the tail stops short ("gated") instead of fading out
+        auto vca = [] (double e, double th) { const double x = e - th; return x > 0.0 ? x * x / ((1.0 - th) * (1.0 - th)) : 0.0; };
+        const double hitE = cpHit.tick(), tailE = cpTail.tick();
+        cpBp.tick (n * hitE, cl, cb);
+        double tl, tb;
+        cpTailBp.tick (n * vca (tailE / (cpLevel > 0.0 ? cpLevel : 1.0), 0.22) * cpLevel, tl, tb);
+        cb += cpTailLp.lp (tb) * cpTailAmt * 3.2;
         v[CP] = cb * 1.5;
     }
 };
