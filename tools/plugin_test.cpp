@@ -42,8 +42,8 @@ int main (int argc, char** argv)
     auto pv = [&] (const char* id) { return proc.apvts.getRawParameterValue (id)->load(); };
     auto near = [] (float a, float b) { return std::abs (a - b) < 0.01f; };
     check (near (pv ("bd_decay"), 24.1f) && near (pv ("bd_lvl"), -8.4f) && near (pv ("sd_decay"), 43.9f) && near (pv ("sd_snappy"), 60.0f)
-           && near (pv ("cp_tune"), 2.6f) && near (pv ("cp_decay"), 20.3f) && near (pv ("cp_lvl"), -3.6f),
-           "defaults: BD Decay 24.1 %, Level -8.4 dB; SD Decay 43.9 %, Snappy 60 %; CP Tune 2.6 st, Decay 20.3 %, Level -3.6 dB");
+           && near (pv ("cp_tune"), 2.6f) && near (pv ("cp_decay"), 20.3f) && near (pv ("cp_lvl"), -3.6f) && near (pv ("cp_tail"), 25.2f),
+           "defaults: BD Decay 24.1 %, Level -8.4 dB; SD Decay 43.9 %, Snappy 60 %; CP Tune 2.6 st, Decay 20.3 %, Level -3.6 dB, Tail 25.2 %");
     check (proc.apvts.getParameter ("pattern")->getNumSteps() == 12, "12 pattern slots");
     std::printf ("BD Decay shows as \"%s\"\n", proc.apvts.getParameter ("bd_decay")->getCurrentValueAsText().toRawUTF8());
 
@@ -384,6 +384,48 @@ int main (int argc, char** argv)
         auto f = outDir.getChildFile ("tooltip.png"); f.deleteFile();
         if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
     }
+    {   // Shift-clicking pattern keys on the panel builds a chain; a plain click ends it
+        PatternPad* pp = nullptr; AboutBox* ab = nullptr;
+        std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+        {
+            for (auto* ch : c.getChildren())
+            {
+                if (auto* x = dynamic_cast<PatternPad*> (ch)) pp = x;
+                if (auto* y = dynamic_cast<AboutBox*> (ch)) ab = y;
+                find (*ch);
+            }
+        };
+        find (*ed);
+        auto click = [&] (int slot, juce::ModifierKeys mods)
+        {
+            auto src = juce::Desktop::getInstance().getMainMouseSource();
+            const auto pos = PatternPad::buttonRect (slot).getCentre();
+            juce::MouseEvent e (src, pos, mods, 1.0f, 0, 0, 0, 0, pp, pp, juce::Time::getCurrentTime(), pos, juce::Time::getCurrentTime(), 1, false);
+            pp->mouseDown (e);
+        };
+        proc.chainClear();
+        if (pp != nullptr)
+        {
+            const auto shift = juce::ModifierKeys (juce::ModifierKeys::shiftModifier | juce::ModifierKeys::leftButtonModifier);
+            click (2, shift); click (5, shift); click (2, shift);
+            check (proc.getChain() == std::vector<int> ({ 2, 5, 2 }), "Shift-click pattern keys 3, 6, 3 -> chain 3, 6, 3");
+            click (0, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier));
+            check (proc.getChainLength() == 0, "a plain click on a pattern key ends the chain");
+        }
+        else check (false, "pattern keys found");
+
+        check (ab != nullptr && ! ab->isVisible(), "About window exists and starts hidden");
+        if (auto* te = dynamic_cast<Tross110Editor*> (ed.get()); te && ab)
+        {
+            te->showAbout();
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto f = outDir.getChildFile ("editor_about.png"); f.deleteFile();
+            if (auto os = f.createOutputStream()) png.writeImageToStream (img, *os);
+            check (ab->isVisible(), "clicking the logo opens About");
+            ab->setVisible (false);
+        }
+    }
+
     {   // the parameter-lock screen
         LockGrid* lg = nullptr; StepGrid* sg = nullptr;
         std::function<void (juce::Component&)> find = [&] (juce::Component& c)

@@ -124,6 +124,19 @@ private:
 };
 
 // LCD read-out in the master section: playing pattern, and the queued one
+// About window: opens from the logo, closes on any click
+class AboutBox : public juce::Component
+{
+public:
+    AboutBox() { setInterceptsMouseClicks (true, true); }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent& e) override;
+    static constexpr const char* kEmail = "ticcoross@gmail.com";
+private:
+    juce::Rectangle<float> panel() const;
+    juce::Rectangle<float> emailRect;
+};
+
 class StatusLcd : public juce::Component, public juce::SettableTooltipClient
 {
 public:
@@ -150,6 +163,12 @@ private:
     {
         explicit Content (Tross110Editor& e) : ed (e) { setOpaque (true); }
         void paint (juce::Graphics& g) override { ed.paintPanel (g); }
+        void mouseDown (const juce::MouseEvent& e) override { if (logoArea().contains (e.getPosition())) ed.showAbout(); }
+        void mouseMove (const juce::MouseEvent& e) override
+        {
+            setMouseCursor (logoArea().contains (e.getPosition()) ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        }
+        static juce::Rectangle<int> logoArea() { return { 14, 8, 130, 40 }; }
         Tross110Editor& ed;
     };
 
@@ -174,6 +193,10 @@ private:
     juce::Slider bpmBox;
     HelpTooltips tooltips { this, proc };
     juce::TextButton helpBtn { "HELP" };
+    AboutBox about;
+public:
+    void showAbout() { about.setVisible (true); about.toFront (false); }
+private:
 
     int lastVersion = -1, lastStep = -2, lastSlot = -1, lastPending = -2, lastLen = -1, lastSel = -1, lastChain = -1;
 

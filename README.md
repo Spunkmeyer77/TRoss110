@@ -3,7 +3,7 @@
 110-style analog drum machine with a 16-step sequencer (AU / VST3 / LV2 / Standalone) by Ticco Ross, 2026.
 
 Six voices: bass drum, snare, hand clap, closed hat, open hat and cymbal, plus a global accent.
-Defaults: BD Decay 24.1 %, Level -8.4 dB · SD Decay 43.9 %, Snappy 60 % · Clap Tune +2.6 st, Decay 20.3 %, Level -3.6 dB.
+Defaults: BD Decay 24.1 %, Level -8.4 dB · SD Decay 43.9 %, Snappy 60 % · Clap Tune +2.6 st, Decay 20.3 %, Level -3.6 dB, Tail 25.2 %.
 
 The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 
@@ -24,6 +24,7 @@ The full manual is in [`docs/TRoss110-Manual.pdf`](docs/TRoss110-Manual.pdf).
 | Pattern keys, right-click | **Copy to** another slot, **Clear**, or edit the chain. A dash on a key means that slot is empty |
 | Pattern chain | **Shift-click** pattern keys to chain them (up to 32 steps, one pattern per bar). The chain follows the song position, so jumps and loops land on the right pattern. Dim LEDs = in the chain; the display shows `CHN step/length`. A plain click ends the chain. Saved with the project |
 | P-LOCK | Switches the screen between the step grid and the **parameter-lock** screen: pick a drum (left) and a knob (Tune, Decay, Level or the drum's extra knob, below), then drag each step's bar to lock that value for that step. Right-click or double-click removes a lock; Shift-right-click clears a lane, a drum or the whole pattern. A lock lasts for that hit's sound; live notes use the knobs. Locked steps show a corner mark on the step grid. Copied, cleared and saved with the pattern |
+| Logo | Click the TRoss 110 logo for the About window: version, the main shortcuts and the contact address |
 | HELP (top right) | Help windows on/off (the knob value read-outs always show). Saved with the project |
 | EXPORT MIDI | Click for a menu: export the playing pattern, all patterns in a row, all patterns as separate `.mid` files, or the chain. Drag the key onto a MIDI track to drop the playing pattern in as a clip. Steps are 16th notes, accented steps velocity 127, channel 10 |
 

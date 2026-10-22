@@ -541,6 +541,82 @@ void LockGrid::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 // ================================================================================================
+juce::Rectangle<float> AboutBox::panel() const { return getLocalBounds().toFloat().withSizeKeepingCentre (560.0f, 360.0f); }
+
+void AboutBox::paint (juce::Graphics& g)
+{
+    g.fillAll (juce::Colours::black.withAlpha (0.55f));
+    const auto r = panel();
+    g.setColour (juce::Colours::black.withAlpha (0.5f));
+    g.fillRoundedRectangle (r.translated (0, 4.0f), 8.0f);
+    g.setGradientFill (juce::ColourGradient::vertical (col::caseTop, r.getY(), col::caseBottom, r.getBottom()));
+    g.fillRoundedRectangle (r, 8.0f);
+    g.setColour (col::blueDark);
+    g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.5f);
+
+    auto a = r.reduced (26.0f, 20.0f);
+    auto logo = font (26.0f, true, -0.02f);
+    g.setFont (logo);
+    const float troW = juce::GlyphArrangement::getStringWidth (logo, "TRoss ");
+    g.setColour (col::print);
+    g.drawText ("TRoss ", a.withHeight (30.0f), juce::Justification::left);
+    g.setColour (col::blue);
+    g.drawText ("110", a.withHeight (30.0f).withTrimmedLeft (troW), juce::Justification::left);
+    g.setColour (col::softPrint);
+    g.setFont (font (10.5f, false, 0.2f));
+    g.drawText ("version " JucePlugin_VersionString "   -   Ticco Ross 2026", a.withHeight (30.0f), juce::Justification::right);
+    a.removeFromTop (36.0f);
+    g.setColour (col::blueDark);
+    g.fillRect (a.removeFromTop (1.5f));
+    a.removeFromTop (10.0f);
+
+    static const char* keys[][2] = {
+        { "Name strip click",          "play the drum   (Shift-click = accented)" },
+        { "Knob drag / double-click",  "change   /   back to default" },
+        { "Step grid click / drag",    "set or clear steps   /   paint a row" },
+        { "Pattern key click",         "play that pattern (changes on the bar)" },
+        { "Shift-click pattern keys",  "add each one to the chain" },
+        { "Right-click pattern key",   "copy to, clear, edit the chain" },
+        { "P-LOCK",                    "parameter-lock screen: drag bars to lock" },
+        { "Right-click a lock bar",    "remove lock   (Shift-right-click = more)" },
+        { "EXPORT MIDI",               "click = menu, drag = drop as a clip" },
+        { "HELP",                      "help windows on/off" },
+    };
+    g.setFont (font (11.0f, true, 0.04f));
+    for (auto& k : keys)
+    {
+        auto row = a.removeFromTop (20.0f);
+        g.setColour (col::print);
+        g.setFont (font (11.0f, true, 0.04f));
+        g.drawText (k[0], row.removeFromLeft (190.0f), juce::Justification::centredLeft);
+        g.setColour (col::softPrint.brighter (0.25f));
+        g.setFont (font (11.0f));
+        g.drawText (k[1], row, juce::Justification::centredLeft);
+    }
+    a.removeFromTop (8.0f);
+    auto contact = a.removeFromTop (22.0f);
+    g.setColour (col::print);
+    g.setFont (font (11.0f, true, 0.04f));
+    g.drawText ("Contact", contact.removeFromLeft (190.0f), juce::Justification::centredLeft);
+    g.setColour (col::blue);
+    g.setFont (font (12.0f, true));
+    const float w = juce::GlyphArrangement::getStringWidth (font (12.0f, true), kEmail) + 4.0f;
+    emailRect = contact.withWidth (w);
+    g.drawText (kEmail, emailRect, juce::Justification::centredLeft);
+    g.fillRect (emailRect.getX(), emailRect.getCentreY() + 7.0f, w - 4.0f, 1.0f);
+    g.setColour (col::softPrint);
+    g.setFont (font (9.5f, false, 0.1f));
+    g.drawText ("click anywhere to close", r.reduced (26.0f, 12.0f), juce::Justification::bottomRight);
+}
+
+void AboutBox::mouseDown (const juce::MouseEvent& e)
+{
+    if (emailRect.contains (e.position))
+        juce::URL (juce::String ("mailto:") + kEmail).launchInDefaultBrowser();
+    setVisible (false);
+}
+
+// ================================================================================================
 void NameStrip::paint (juce::Graphics& g)
 {
     const auto r = getLocalBounds().toFloat();
@@ -872,6 +948,9 @@ Tross110Editor::Tross110Editor (Tross110Processor& p)
     lockBtn.setTooltip ("Switch the screen between the steps and the parameter locks.");
     lockBtn.setBounds (kMasterX + kMasterW - 78, 230, 70, 18);
     content.addAndMakeVisible (lockBtn);
+
+    content.addChildComponent (about);   // added last so it sits over everything
+    about.setBounds (0, 0, kWidth, kHeight);
 
     grid.setTooltip ("Click a cell to set or clear a step; drag along a row to paint. AC = accent for every drum on that step.");
     content.addAndMakeVisible (patternPad);

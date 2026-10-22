@@ -111,6 +111,7 @@ s += [table([
                "tails ringing under it - which also drives the output into grit. 0 % turns accents off."],
     ["VOLUME", "Main output level. Drums on their own outputs are not affected."],
     ["Display", "Shows the playing pattern, and the queued one (for example PAT 01 > 04)."],
+    ["Logo", "Click the TRoss 110 logo (top left) for the About window: the version, the main shortcuts and the contact address. Click anywhere to close it."],
     ["P-LOCK", "Switches the screen between the step grid and the parameter locks (section 3.1)."],
     ["HELP (top right)", "Help windows on/off. With HELP on, resting the mouse on any control shows what it does. The knob value read-outs "
              "show either way. The setting is saved with your song."],
@@ -193,6 +194,7 @@ for t in [
 ]:
     s.append(Paragraph("•  " + t, body))
 
+s += [P("Questions or feedback: <b>ticcoross@gmail.com</b>")]
 s += [Paragraph("7  Specifications", h1)]
 s += [table([
     ["", ""],
